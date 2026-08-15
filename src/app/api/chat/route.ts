@@ -29,20 +29,39 @@ export async function POST(req: Request) {
       }, { status: 503 });
     }
 
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
+
+    // Server-side rate limit using Supabase RPC
+    const ip = req.headers.get('x-forwarded-for') || '127.0.0.1';
+    try {
+      const { data: isAllowed, error: rateLimitError } = await supabase.rpc('check_rate_limit', {
+        client_ip: ip,
+        max_requests: 10,
+        window_seconds: 60
+      });
+      if (rateLimitError) {
+        console.error('Rate limit RPC error:', rateLimitError);
+      } else if (isAllowed === false) {
+        return NextResponse.json({ error: "RankUp AI is temporarily busy. Please try again in a moment." }, { status: 429 });
+      }
+    } catch (err) {
+      console.error('Rate limit check failed:', err);
+    }
+
     // Safely get the user's latest query
     const lastUserMessage = [...messages].reverse().find(m => m.role === 'user');
     let groundingData = { used: false, source: '', chapter: '', chunks: 0, scores: [] as number[], topics: [] as string[] };
     let ncertContext = '';
+    let embeddingGenerated = false;
 
     if (lastUserMessage) {
       const userQuery = lastUserMessage.content;
       
       try {
         const queryEmbedding = await generateQueryEmbedding(userQuery);
-        
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-        const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
+        embeddingGenerated = true;
 
         const CHAPTERS = [
           'Chemical Reactions and Equations',
@@ -119,8 +138,10 @@ INSTRUCTIONS:
 - You may still help them with general Socratic tutoring if it's a general question not requiring specific textbook text.`;
     }
 
-    // Format messages for Gemini API
-    const formattedMessages = messages.map((msg: any) => ({
+    // Format messages for Gemini API (Bound history to save tokens)
+    const MAX_HISTORY = 5;
+    const recentMessages = messages.slice(-MAX_HISTORY);
+    const formattedMessages = recentMessages.map((msg: any) => ({
       role: msg.role === 'user' ? 'user' : 'model',
       parts: [{ text: msg.content }]
     }));
@@ -139,8 +160,10 @@ INSTRUCTIONS:
     let response;
     let retries = 3;
     let delay = 1000;
+    let retriesUsed = 0;
     
     for (let i = 0; i <= retries; i++) {
+      retriesUsed = i;
       response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
         {
@@ -153,12 +176,36 @@ INSTRUCTIONS:
       );
       
       if ((response.status === 429 || response.status === 503) && i < retries) {
-        await new Promise(resolve => setTimeout(resolve, delay));
+        const errorText = await response.clone().text().catch(() => '');
+        
+        // Break early if we detect persistent quota exhaustion to prevent spamming
+        if (errorText.toLowerCase().includes('quota') || errorText.toLowerCase().includes('exhausted')) {
+          console.warn('Persistent Quota Exhaustion detected. Aborting retries.');
+          break;
+        }
+
+        const retryAfter = response.headers.get('retry-after');
+        const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : delay;
+        
+        await new Promise(resolve => setTimeout(resolve, waitTime));
         delay *= 2; // Exponential backoff
         continue;
       }
       break;
     }
+    
+    // Usage Observability Logging
+    console.log(JSON.stringify({
+      event: 'chat_request',
+      timestamp: new Date().toISOString(),
+      requestId: crypto.randomUUID(),
+      ip: ip,
+      embeddingGenerated: embeddingGenerated,
+      chunksRetrieved: groundingData.chunks,
+      topSimilarity: groundingData.scores[0] || null,
+      httpStatus: response ? response.status : null,
+      retriesUsed: retriesUsed
+    }));
 
     if (!response || !response.ok) {
       const errorData = response ? await response.json().catch(() => ({})) : {};
