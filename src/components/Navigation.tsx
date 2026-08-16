@@ -17,10 +17,7 @@ export default function Navigation() {
               <Home className="h-4 w-4" />
               Home
             </Link>
-            <Link href="/dashboard" className="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white px-3 py-2 text-sm font-medium flex items-center gap-2">
-              <LayoutDashboard className="h-4 w-4" />
-              Dashboard
-            </Link>
+
             <Link href="/tutor" className="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white px-3 py-2 text-sm font-medium flex items-center gap-2">
               <MessageSquare className="h-4 w-4" />
               Ask a Doubt

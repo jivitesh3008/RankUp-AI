@@ -31,9 +31,18 @@ export default function TutorPage() {
   const [subject, setSubject] = useState('Mathematics');
   
   const [isCompressing, setIsCompressing] = useState(false);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleScroll = () => {
+    if (!chatContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+    setShouldAutoScroll(isNearBottom);
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -126,13 +135,23 @@ export default function TutorPage() {
     e.target.value = '';
   };
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  useEffect(() => {
+    if (shouldAutoScroll) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, shouldAutoScroll]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const prefill = params.get('prefill');
+      if (prefill) {
+        setInput(prefill);
+        // Clean up URL so it doesn't persist on refresh
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, []);
 
   const handleSend = async () => {
     if (!input.trim() && !selectedImage) return;
@@ -150,6 +169,11 @@ export default function TutorPage() {
     setSelectedImageMime(null);
     setIsLoading(true);
     setError(null);
+    
+    setShouldAutoScroll(true);
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 50);
     
     try {
       const response = await fetch('/api/chat', {
@@ -197,7 +221,9 @@ export default function TutorPage() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      if (!isLoading && !isCompressing) {
+        handleSend();
+      }
     }
   };
 
@@ -240,7 +266,11 @@ export default function TutorPage() {
       </div>
 
       <div className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-sm">
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        <div 
+          className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6"
+          ref={chatContainerRef}
+          onScroll={handleScroll}
+        >
           {messages.map((msg) => (
             <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               {msg.role === 'assistant' && (
@@ -253,13 +283,25 @@ export default function TutorPage() {
                   ? 'bg-indigo-600 text-white rounded-br-sm' 
                   : 'bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-bl-sm'
               }`}>
+                {msg.imageContext && !msg.image && (
+                   <div className="flex items-center gap-1.5 mb-2 text-indigo-200 text-xs font-medium">
+                     <CheckCircle2 className="w-3.5 h-3.5" />
+                     <span>Image context reused</span>
+                   </div>
+                )}
                 {msg.image && (
-                  <div className="mb-3">
+                  <div className="mb-2">
                     <img src={`data:${msg.mimeType};base64,${msg.image}`} alt="Uploaded content" className="max-h-64 rounded-lg object-contain" />
                   </div>
                 )}
+                {msg.imageContext && msg.image && (
+                   <div className="flex items-center gap-1.5 mt-2 text-indigo-200 text-xs font-medium bg-indigo-700/50 px-2 py-1.5 rounded-md inline-flex">
+                     <CheckCircle2 className="w-3.5 h-3.5" />
+                     <span>Image analyzed successfully</span>
+                   </div>
+                )}
                 {msg.role === 'assistant' ? (
-                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                  <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_.math-display]:overflow-x-auto [&_.math-display]:overflow-y-hidden [&_.math-display]:py-2 [&_.math-display]:scrollbar-thin [&_.math-display]:scrollbar-thumb-slate-300 dark:[&_.math-display]:scrollbar-thumb-slate-600">
                     <ReactMarkdown
                       remarkPlugins={[remarkMath]}
                       rehypePlugins={[rehypeKatex]}
@@ -284,10 +326,11 @@ export default function TutorPage() {
               <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center shrink-0">
                 <Bot className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
               </div>
-              <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl rounded-bl-sm px-5 py-4 flex items-center gap-2">
-                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:-.3s]"></div>
-                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:-.5s]"></div>
+              <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl rounded-bl-sm px-5 py-4 flex items-center gap-3">
+                <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
+                <span className="text-sm text-slate-600 dark:text-slate-300 font-medium">
+                  {messages[messages.length - 1]?.image || messages[messages.length - 1]?.imageContext ? 'Analyzing image...' : 'Thinking...'}
+                </span>
               </div>
             </div>
           )}

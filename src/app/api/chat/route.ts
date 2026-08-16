@@ -52,7 +52,7 @@ export async function POST(req: Request) {
       if (rateLimitError) {
         console.error('Rate limit RPC error:', rateLimitError);
       } else if (isAllowed === false) {
-        return NextResponse.json({ error: "RankUp AI is temporarily busy. Please try again in a moment." }, { status: 429 });
+        return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again." }, { status: 429 });
       }
     } catch (err) {
       console.error('Rate limit check failed:', err);
@@ -286,7 +286,7 @@ INSTRUCTIONS:
       
       const statusCode = response?.status || 500;
       if (statusCode === 429 || statusCode === 503) {
-        return NextResponse.json({ error: "RankUp AI is temporarily busy. Please try again in a moment." }, { status: 429 });
+        return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again." }, { status: 429 });
       }
       
       const apiErrorMessage = errorData?.error?.message || JSON.stringify(errorData) || 'Unknown error';
