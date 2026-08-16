@@ -55,9 +55,66 @@ export async function POST(req: Request) {
     let groundingData = { used: false, source: '', chapter: '', chunks: 0, scores: [] as number[], topics: [] as string[] };
     let ncertContext = '';
     let embeddingGenerated = false;
+    let newlyExtractedImageContext = null;
+    const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
     if (lastUserMessage) {
-      const userQuery = lastUserMessage.content;
+      // STAGE 1: Image Understanding
+      if (lastUserMessage.image && !lastUserMessage.imageContext) {
+        console.log("Running Stage 1: Multimodal Image Understanding");
+        try {
+          const imagePart = {
+            inline_data: {
+              mime_type: lastUserMessage.mimeType || 'image/jpeg',
+              data: lastUserMessage.image
+            }
+          };
+          const promptPart = {
+            text: `Analyze this image for a Class 10 science tutor. Respond ONLY with a valid JSON object matching this schema (do not include markdown formatting or backticks):
+{
+  "imageType": "handwritten_solution" | "textbook_question" | "diagram" | "other",
+  "questionText": "Any explicit question asked or printed in the image. Leave blank if none.",
+  "studentWork": "Transcribe any handwritten steps, reasoning, or calculations.",
+  "diagramDescription": "Describe any diagrams, labels, or relationships present.",
+  "equations": ["Equation 1", "Equation 2"],
+  "likelySubject": "Science" | "Mathematics" | "English",
+  "likelyTopic": "Guessed chapter or topic"
+}`
+          };
+
+          const stage1Body = {
+            contents: [{ role: 'user', parts: [promptPart, imagePart] }],
+            generationConfig: { temperature: 0.1 }
+          };
+
+          const stg1Res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(stage1Body) }
+          );
+
+          if (stg1Res.ok) {
+            const stg1Data = await stg1Res.json();
+            const rawJsonText = stg1Data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (rawJsonText) {
+              const cleanedText = rawJsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+              newlyExtractedImageContext = JSON.parse(cleanedText);
+              lastUserMessage.imageContext = newlyExtractedImageContext;
+            }
+          } else {
+             console.error("Stage 1 Image Understanding failed:", await stg1Res.text());
+          }
+        } catch (err) {
+          console.error("Stage 1 execution error:", err);
+        }
+      }
+
+      let userQuery = lastUserMessage.content || '';
+      if (lastUserMessage.imageContext?.questionText) {
+         userQuery += ' ' + lastUserMessage.imageContext.questionText;
+      }
+      userQuery = userQuery.trim();
+      
+      if (userQuery) {
       
       try {
         const queryEmbedding = await generateQueryEmbedding(userQuery);
@@ -121,6 +178,7 @@ export async function POST(req: Request) {
       } catch (err) {
         console.error('Failed to generate embedding or query supabase:', err);
       }
+      }
     }
 
     let finalSystemPrompt = SYSTEM_PROMPT_BASE;
@@ -141,10 +199,18 @@ INSTRUCTIONS:
     // Format messages for Gemini API (Bound history to save tokens)
     const MAX_HISTORY = 5;
     const recentMessages = messages.slice(-MAX_HISTORY);
-    const formattedMessages = recentMessages.map((msg: any) => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.content }]
-    }));
+    const formattedMessages = recentMessages.map((msg: any) => {
+      let textContent = msg.content || '';
+      
+      if (msg.role === 'user' && msg.imageContext) {
+         textContent += `\n\n[ATTACHED IMAGE CONTENT (Structured Analysis): ${JSON.stringify(msg.imageContext)}]`;
+      }
+      
+      return {
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: textContent }]
+      };
+    });
 
     const requestBody = {
       system_instruction: {
@@ -156,7 +222,6 @@ INSTRUCTIONS:
       }
     };
 
-    const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
     let response;
     let retries = 3;
     let delay = 1000;
@@ -230,7 +295,8 @@ INSTRUCTIONS:
 
     return NextResponse.json({ 
       response: replyText,
-      grounding: groundingData
+      grounding: groundingData,
+      ...(newlyExtractedImageContext ? { imageContext: newlyExtractedImageContext } : {})
     });
   } catch (error) {
     console.error('Chat API Error:', error);

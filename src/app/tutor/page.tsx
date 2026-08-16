@@ -10,6 +10,9 @@ type Message = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  image?: string;
+  mimeType?: string;
+  imageContext?: any;
 };
 
 export default function TutorPage() {
@@ -21,11 +24,40 @@ export default function TutorPage() {
     }
   ]);
   const [input, setInput] = useState('');
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedImageMime, setSelectedImageMime] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [subject, setSubject] = useState('Mathematics');
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image must be less than 5MB.');
+      e.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      const match = result.match(/^data:(image\/[a-zA-Z0-9.-]+);base64,(.+)$/);
+      if (match) {
+        setSelectedImageMime(match[1]);
+        setSelectedImage(match[2]);
+        setError(null);
+      } else {
+        setError('Invalid image format.');
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -36,16 +68,19 @@ export default function TutorPage() {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() && !selectedImage) return;
     
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
       content: input.trim(),
+      ...(selectedImage && selectedImageMime ? { image: selectedImage, mimeType: selectedImageMime } : {})
     };
     
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
+    setSelectedImage(null);
+    setSelectedImageMime(null);
     setIsLoading(true);
     setError(null);
     
@@ -56,7 +91,13 @@ export default function TutorPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: [...messages, userMessage].map(m => ({ role: m.role, content: m.content })),
+          messages: [...messages, userMessage].map(m => ({ 
+            role: m.role, 
+            content: m.content,
+            image: m.image,
+            mimeType: m.mimeType,
+            imageContext: m.imageContext
+          })),
         }),
       });
       
@@ -64,6 +105,11 @@ export default function TutorPage() {
       
       if (!response.ok) {
         throw new Error(data.error || 'Something went wrong');
+      }
+      
+      if (data.imageContext) {
+        // Update user message with processed image context
+        setMessages((prev) => prev.map(m => m.id === userMessage.id ? { ...m, imageContext: data.imageContext } : m));
       }
       
       const assistantMessage: Message = {
@@ -140,6 +186,11 @@ export default function TutorPage() {
                   ? 'bg-indigo-600 text-white rounded-br-sm' 
                   : 'bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-bl-sm'
               }`}>
+                {msg.image && (
+                  <div className="mb-3">
+                    <img src={`data:${msg.mimeType};base64,${msg.image}`} alt="Uploaded content" className="max-h-64 rounded-lg object-contain" />
+                  </div>
+                )}
                 {msg.role === 'assistant' ? (
                   <div className="prose prose-sm dark:prose-invert max-w-none">
                     <ReactMarkdown
@@ -186,13 +237,33 @@ export default function TutorPage() {
 
         <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
           <div className="flex items-end gap-2 max-w-4xl mx-auto">
+            <input 
+              type="file" 
+              accept="image/jpeg, image/png, image/webp" 
+              className="hidden" 
+              ref={fileInputRef} 
+              onChange={handleImageChange} 
+            />
             <button 
+              onClick={() => fileInputRef.current?.click()}
               className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors shrink-0"
-              title="Upload image (Coming Soon)"
+              title="Upload image"
             >
               <ImageIcon className="w-6 h-6" />
             </button>
-            <div className="flex-1 relative">
+            <div className="flex-1 relative flex flex-col">
+              {selectedImage && (
+                <div className="relative inline-block mb-2 self-start p-2 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <img src={`data:${selectedImageMime};base64,${selectedImage}`} alt="Preview" className="h-20 w-auto rounded-md object-contain" />
+                  <button 
+                    onClick={() => { setSelectedImage(null); setSelectedImageMime(null); }} 
+                    className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-sm transition-colors"
+                    title="Remove image"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -204,7 +275,7 @@ export default function TutorPage() {
               />
               <button
                 onClick={handleSend}
-                disabled={!input.trim() || isLoading}
+                disabled={(!input.trim() && !selectedImage) || isLoading}
                 className="absolute right-2 bottom-2 p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 transition-colors"
               >
                 <Send className="w-5 h-5" />
