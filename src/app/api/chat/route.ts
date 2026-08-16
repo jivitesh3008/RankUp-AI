@@ -16,7 +16,15 @@ Use a Socratic teaching style.
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
+    const bodyText = await req.text();
+    
+    // Safety limit: ~5MB (5 * 1024 * 1024 bytes)
+    // We check the stringified payload length.
+    if (bodyText.length > 5 * 1024 * 1024) {
+      return NextResponse.json({ error: 'Payload too large. Max allowed size is 5MB.' }, { status: 413 });
+    }
+
+    const { messages } = JSON.parse(bodyText);
 
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: 'Invalid messages format' }, { status: 400 });

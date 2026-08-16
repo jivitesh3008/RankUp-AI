@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
-import { Send, Image as ImageIcon, Trash2, Bot, User, AlertCircle } from 'lucide-react';
+import { Send, Image as ImageIcon, Trash2, Bot, User, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -30,6 +30,8 @@ export default function TutorPage() {
   const [error, setError] = useState<string | null>(null);
   const [subject, setSubject] = useState('Mathematics');
   
+  const [isCompressing, setIsCompressing] = useState(false);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -37,24 +39,89 @@ export default function TutorPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Image must be less than 5MB.');
+    if (file.size > 15 * 1024 * 1024) {
+      setError('Original image is too large. Please select an image under 15MB.');
       e.target.value = '';
       return;
     }
 
+    setIsCompressing(true);
+    setError(null);
+
     const reader = new FileReader();
     reader.onload = (event) => {
       const result = event.target?.result as string;
-      const match = result.match(/^data:(image\/[a-zA-Z0-9.-]+);base64,(.+)$/);
-      if (match) {
-        setSelectedImageMime(match[1]);
-        setSelectedImage(match[2]);
-        setError(null);
-      } else {
-        setError('Invalid image format.');
-      }
+      const img = new window.Image();
+      
+      img.onload = () => {
+        const MAX_DIMENSION = 2500;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+          if (width > height) {
+            height = Math.round((height * MAX_DIMENSION) / width);
+            width = MAX_DIMENSION;
+          } else {
+            width = Math.round((width * MAX_DIMENSION) / height);
+            height = MAX_DIMENSION;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          setError('Failed to process image. Please try another.');
+          setIsCompressing(false);
+          return;
+        }
+
+        let targetMime = file.type;
+        if (targetMime === 'image/png') {
+           ctx.fillStyle = '#ffffff';
+           ctx.fillRect(0, 0, width, height);
+           targetMime = 'image/jpeg';
+        }
+        
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const quality = 0.85;
+        const compressedDataUrl = canvas.toDataURL(targetMime, quality);
+        
+        const sizeInBytes = (compressedDataUrl.length * 3) / 4;
+
+        if (sizeInBytes > 5 * 1024 * 1024) {
+           setError('Even after compression, the image is too large. Please choose a smaller image.');
+           setIsCompressing(false);
+           return;
+        }
+
+        const match = compressedDataUrl.match(/^data:(image\/[a-zA-Z0-9.-]+);base64,(.+)$/);
+        if (match) {
+          setSelectedImageMime(match[1]);
+          setSelectedImage(match[2]);
+        } else {
+          setError('Failed to compress image.');
+        }
+        setIsCompressing(false);
+      };
+      
+      img.onerror = () => {
+        setError('Invalid or corrupted image file.');
+        setIsCompressing(false);
+      };
+      
+      img.src = result;
     };
+    
+    reader.onerror = () => {
+       setError('Failed to read file.');
+       setIsCompressing(false);
+    };
+    
     reader.readAsDataURL(file);
     e.target.value = '';
   };
@@ -252,8 +319,17 @@ export default function TutorPage() {
               <ImageIcon className="w-6 h-6" />
             </button>
             <div className="flex-1 relative flex flex-col">
-              {selectedImage && (
+              {isCompressing ? (
+                <div className="relative inline-block mb-2 self-start p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center gap-3">
+                  <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
+                  <span className="text-sm text-slate-600 dark:text-slate-300 font-medium">Optimizing image...</span>
+                </div>
+              ) : selectedImage ? (
                 <div className="relative inline-block mb-2 self-start p-2 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2 mb-2 px-1">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Image ready</span>
+                  </div>
                   <img src={`data:${selectedImageMime};base64,${selectedImage}`} alt="Preview" className="h-20 w-auto rounded-md object-contain" />
                   <button 
                     onClick={() => { setSelectedImage(null); setSelectedImageMime(null); }} 
@@ -263,7 +339,7 @@ export default function TutorPage() {
                     <Trash2 className="w-3 h-3" />
                   </button>
                 </div>
-              )}
+              ) : null}
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -275,7 +351,7 @@ export default function TutorPage() {
               />
               <button
                 onClick={handleSend}
-                disabled={(!input.trim() && !selectedImage) || isLoading}
+                disabled={(!input.trim() && !selectedImage) || isLoading || isCompressing}
                 className="absolute right-2 bottom-2 p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 transition-colors"
               >
                 <Send className="w-5 h-5" />
