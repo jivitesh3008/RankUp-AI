@@ -49,6 +49,37 @@ as $$
   limit match_count;
 $$;
 
+-- Global vector search across all chapters for optimized RAG
+create or replace function match_knowledge_chunks_global (
+  query_embedding vector(768),
+  match_threshold float,
+  match_count int,
+  p_class text,
+  p_subject text
+)
+returns table (
+  id uuid,
+  content text,
+  topic text,
+  chapter text,
+  similarity float
+)
+language sql stable
+as $$
+  select
+    knowledge_chunks.id,
+    knowledge_chunks.content,
+    knowledge_chunks.topic,
+    knowledge_chunks.chapter,
+    1 - (knowledge_chunks.embedding <=> query_embedding) as similarity
+  from knowledge_chunks
+  where 1 - (knowledge_chunks.embedding <=> query_embedding) > match_threshold
+    and knowledge_chunks.class = p_class
+    and knowledge_chunks.subject = p_subject
+  order by knowledge_chunks.embedding <=> query_embedding
+  limit match_count;
+$$;
+
 -- Table to store API rate limits
 create table if not exists rate_limits (
   ip text primary key,

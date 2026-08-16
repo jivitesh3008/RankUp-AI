@@ -102,7 +102,7 @@ export async function POST(req: Request) {
     }
 
     // 4. Generate Test
-    const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+    const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
     const systemPrompt = `You are an expert educational examiner. Your task is to generate a custom test strictly based ONLY on the provided YouTube video transcript.
 
@@ -159,14 +159,13 @@ ${fullTranscript}
         }
       );
       
-      if ((response.status === 429 || response.status === 503) && i < retries) {
-        const errorText = await response.clone().text().catch(() => '');
-        if (errorText.toLowerCase().includes('quota') || errorText.toLowerCase().includes('exhausted')) {
-          break;
-        }
-        const retryAfter = response.headers.get('retry-after');
-        const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : delay;
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+      if (response.status === 429 || response.status === 503) {
+        // Fail fast on any 429/503 for Gemini API quota safety
+        break;
+      }
+      
+      if (!response.ok && i < retries) {
+        await new Promise(resolve => setTimeout(resolve, delay));
         delay *= 2;
         continue;
       }

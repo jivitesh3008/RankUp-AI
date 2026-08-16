@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { generateQueryEmbedding } from '@/lib/embeddings';
 import { encryptAnswer } from '@/lib/evaluate';
+import staticTestEmbedding from '@/lib/static-test-embedding.json';
 
 const ALL_CHAPTERS = [
   'Chemical Reactions and Equations',
@@ -70,7 +70,7 @@ export async function POST(req: Request) {
     const topKPerChapter = targetChapters.length > 5 ? 3 : 5;
     const matchThreshold = 0.65;
 
-    const queryEmbedding = await generateQueryEmbedding("Core concepts, definitions, numericals, diagrams, and important scientific laws.");
+    const queryEmbedding = staticTestEmbedding;
 
     const results = await Promise.all(targetChapters.map((ch: string) => 
       supabase.rpc('match_knowledge_chunks', {
@@ -151,14 +151,13 @@ EXPECTED JSON SCHEMA:
         }
       );
       
-      if ((response.status === 429 || response.status === 503) && i < retries) {
-        const errorText = await response.clone().text().catch(() => '');
-        if (errorText.toLowerCase().includes('quota') || errorText.toLowerCase().includes('exhausted')) {
-          break;
-        }
-        const retryAfter = response.headers.get('retry-after');
-        const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : delay;
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+      if (response.status === 429 || response.status === 503) {
+        // Fail fast on any 429/503 for Gemini API quota safety
+        break;
+      }
+      
+      if (!response.ok && i < retries) {
+        await new Promise(resolve => setTimeout(resolve, delay));
         delay *= 2;
         continue;
       }

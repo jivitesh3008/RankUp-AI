@@ -185,8 +185,7 @@ export default function TutorPage() {
           messages: [...messages, userMessage].map(m => ({ 
             role: m.role, 
             content: m.content,
-            image: m.image,
-            mimeType: m.mimeType,
+            ...(m.id === userMessage.id ? { image: m.image, mimeType: m.mimeType } : {}),
             imageContext: m.imageContext
           })),
         }),

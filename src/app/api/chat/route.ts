@@ -2,6 +2,20 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { generateQueryEmbedding } from '@/lib/embeddings';
 
+const embeddingCache = new Map<string, { vector: number[], timestamp: number }>();
+const responseCache = new Map<string, { data: any, timestamp: number }>();
+
+const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+function cleanupCache(cache: Map<string, { timestamp: number }>) {
+  const now = Date.now();
+  for (const [key, value] of cache.entries()) {
+    if (now - value.timestamp > CACHE_TTL_MS) {
+      cache.delete(key);
+    }
+  }
+}
+
 const SYSTEM_PROMPT_BASE = `You are the RankUp AI Tutor, a Class 10 CBSE tutor.
 Your teaching philosophy is: "Don't just give the answer. Help the student understand it."
 Use a Socratic teaching style.
@@ -66,6 +80,13 @@ export async function POST(req: Request) {
     let newlyExtractedImageContext = null;
     const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
+    cleanupCache(responseCache);
+    const cacheKey = messages.length === 1 && lastUserMessage && !lastUserMessage.image && !lastUserMessage.imageContext ? lastUserMessage.content.trim() : null;
+    if (cacheKey && responseCache.has(cacheKey)) {
+        console.log("Response cache hit for:", cacheKey);
+        return NextResponse.json(responseCache.get(cacheKey)!.data);
+    }
+
     if (lastUserMessage) {
       // STAGE 1: Image Understanding
       if (lastUserMessage.image && !lastUserMessage.imageContext) {
@@ -110,6 +131,9 @@ export async function POST(req: Request) {
             }
           } else {
              console.error("Stage 1 Image Understanding failed:", await stg1Res.text());
+             if (stg1Res.status === 429 || stg1Res.status === 503) {
+               return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again." }, { status: 429 });
+             }
           }
         } catch (err) {
           console.error("Stage 1 execution error:", err);
@@ -125,50 +149,37 @@ export async function POST(req: Request) {
       if (userQuery) {
       
       try {
-        const queryEmbedding = await generateQueryEmbedding(userQuery);
+        cleanupCache(embeddingCache);
+        let queryEmbedding;
+        if (embeddingCache.has(userQuery)) {
+           queryEmbedding = embeddingCache.get(userQuery)!.vector;
+        } else {
+           queryEmbedding = await generateQueryEmbedding(userQuery);
+           embeddingCache.set(userQuery, { vector: queryEmbedding, timestamp: Date.now() });
+           if (embeddingCache.size > 1000) embeddingCache.clear();
+        }
         embeddingGenerated = true;
-
-        const CHAPTERS = [
-          'Chemical Reactions and Equations',
-          'Acids, Bases and Salts',
-          'Metals and Non-metals',
-          'Carbon and its Compounds',
-          'Life Processes',
-          'Control and Coordination',
-          'How do Organisms Reproduce?',
-          'Heredity',
-          'Light - Reflection and Refraction',
-          'The Human Eye and the Colourful World',
-          'Electricity',
-          'Magnetic Effects of Electric Current',
-          'Our Environment'
-        ];
 
         const matchThreshold = 0.65;
         const topK = 5;
         
         let allChunks: any[] = [];
-        const results = await Promise.all(CHAPTERS.map(ch => 
-          supabase.rpc('match_knowledge_chunks', {
-            query_embedding: queryEmbedding,
-            match_threshold: matchThreshold,
-            match_count: topK,
-            p_class: '10',
-            p_subject: 'Science',
-            p_chapter: ch
-          }).then(res => ({ ...res, chapter: ch }))
-        ));
         
-        for (const result of results) {
-          if (result.error) {
-            console.error('Vector search error for chapter', result.chapter, ':', result.error);
-          } else if (result.data) {
-            allChunks = allChunks.concat(result.data.map((c: any) => ({ ...c, chapter: result.chapter })));
-          }
+        const result = await supabase.rpc('match_knowledge_chunks_global', {
+          query_embedding: queryEmbedding,
+          match_threshold: matchThreshold,
+          match_count: topK,
+          p_class: '10',
+          p_subject: 'Science'
+        });
+        
+        if (result.error) {
+          console.error('Global vector search error:', result.error);
+        } else if (result.data) {
+          allChunks = result.data;
         }
         
-        allChunks.sort((a, b) => b.similarity - a.similarity);
-        const chunks = allChunks.slice(0, topK);
+        const chunks = allChunks; // already sorted and limited to topK by the global RPC
 
         console.log('CHUNKS RETRIEVED (top):', chunks.length);
 
@@ -248,19 +259,12 @@ INSTRUCTIONS:
         }
       );
       
-      if ((response.status === 429 || response.status === 503) && i < retries) {
-        const errorText = await response.clone().text().catch(() => '');
-        
-        // Break early if we detect persistent quota exhaustion to prevent spamming
-        if (errorText.toLowerCase().includes('quota') || errorText.toLowerCase().includes('exhausted')) {
-          console.warn('Persistent Quota Exhaustion detected. Aborting retries.');
-          break;
-        }
-
-        const retryAfter = response.headers.get('retry-after');
-        const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : delay;
-        
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+      if (response.status === 429 || response.status === 503) {
+        break; // Fail fast on quota/rate limit
+      }
+      
+      if (!response.ok && i < retries) {
+        await new Promise(resolve => setTimeout(resolve, delay));
         delay *= 2; // Exponential backoff
         continue;
       }
@@ -301,11 +305,18 @@ INSTRUCTIONS:
       return NextResponse.json({ error: 'Received empty response from AI.' }, { status: 500 });
     }
 
-    return NextResponse.json({ 
+    const finalResponseData = { 
       response: replyText,
       grounding: groundingData,
       ...(newlyExtractedImageContext ? { imageContext: newlyExtractedImageContext } : {})
-    });
+    };
+    
+    if (cacheKey && finalResponseData.response) {
+       responseCache.set(cacheKey, { data: finalResponseData, timestamp: Date.now() });
+       if (responseCache.size > 1000) responseCache.clear();
+    }
+
+    return NextResponse.json(finalResponseData);
   } catch (error) {
     console.error('Chat API Error:', error);
     return NextResponse.json({ error: 'An unexpected error occurred.' }, { status: 500 });
