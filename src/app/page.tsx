@@ -90,11 +90,15 @@ export default function Home() {
               <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Test Yourself</h2>
               <div className="space-y-3">
                 <Link href="/custom-test" className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-slate-700 dark:text-slate-300 hover:text-indigo-700 dark:hover:text-indigo-300 rounded-xl transition-colors font-medium text-sm">
-                  Create 5-question test
+                  Create 5-question NCERT test
                   <ArrowRight className="w-4 h-4" />
                 </Link>
                 <Link href="/custom-test" className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-slate-700 dark:text-slate-300 hover:text-indigo-700 dark:hover:text-indigo-300 rounded-xl transition-colors font-medium text-sm">
-                  Create 10-question test
+                  Create 10-question NCERT test
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+                <Link href="/youtube-test" className="w-full flex items-center justify-between px-4 py-3 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-700 dark:text-red-300 hover:text-red-800 dark:hover:text-red-200 rounded-xl transition-colors font-medium text-sm border border-red-100 dark:border-red-900/50">
+                  Create test from YouTube video
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>

@@ -25,6 +25,9 @@ export default function Navigation() {
             <Link href="/progress" className="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white px-3 py-2 text-sm font-medium">
               Progress
             </Link>
+            <Link href="/youtube-test" className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 px-3 py-2 text-sm font-medium flex items-center gap-2">
+              YouTube Test
+            </Link>
             <Link href="/pyqs" className="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white px-3 py-2 text-sm font-medium">
               PYQs
             </Link>
