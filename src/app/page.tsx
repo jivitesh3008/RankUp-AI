@@ -37,7 +37,7 @@ export default function Home() {
             <div className="bg-indigo-100 dark:bg-indigo-900/30 w-12 h-12 rounded-lg flex items-center justify-center mb-6">
               <BrainCircuit className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
             </div>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Socratic Tutoring</h3>
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">AI Tutor</h3>
             <p className="text-slate-600 dark:text-slate-400">Learn through guided questions instead of answer dumping.</p>
           </div>
 
