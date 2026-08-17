@@ -1,0 +1,9 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+# The following plugin is optional but recommended for older Next.js versions.
+# Netlify's modern Next.js runtime automatically detects Next.js 13.5+ apps,
+# so this is here as a fallback/explicit definition.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
