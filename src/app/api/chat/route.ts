@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { generateQueryEmbedding } from '@/lib/embeddings';
+import { createClient as createServerClientLocal } from '@/utils/supabase/server';
 
 const embeddingCache = new Map<string, { vector: number[], timestamp: number }>();
 const responseCache = new Map<string, { data: any, timestamp: number }>();
@@ -30,6 +31,9 @@ Use a Socratic teaching style.
 
 export async function POST(req: Request) {
   try {
+    const serverSupabase = await createServerClientLocal();
+    const { data: { user } } = await serverSupabase.auth.getUser();
+
     const bodyText = await req.text();
     
     // Safety limit: ~5MB (5 * 1024 * 1024 bytes)
@@ -311,6 +315,19 @@ INSTRUCTIONS:
       ...(newlyExtractedImageContext ? { imageContext: newlyExtractedImageContext } : {})
     };
     
+    if (user && lastUserMessage) {
+      try {
+        await supabase.from('student_activity').insert({
+          user_id: user.id,
+          event_type: lastUserMessage.image ? 'image_question' : 'tutor_question',
+          chapter: groundingData.chapter || null,
+          metadata_json: { query: (lastUserMessage.content || '').substring(0, 100) }
+        });
+      } catch (err) {
+        console.error('Failed to log activity', err);
+      }
+    }
+
     if (cacheKey && finalResponseData.response) {
        responseCache.set(cacheKey, { data: finalResponseData, timestamp: Date.now() });
        if (responseCache.size > 1000) responseCache.clear();

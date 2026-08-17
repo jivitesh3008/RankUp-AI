@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { decryptAnswer, evaluateNumerical } from '@/lib/evaluate';
+import { createClient as createServerClientLocal } from '@/utils/supabase/server';
 
 export async function POST(req: Request) {
   try {
+    const serverSupabase = await createServerClientLocal();
+    const { data: { user } } = await serverSupabase.auth.getUser();
+
     const bodyText = await req.text();
     
     // Safety limit check
@@ -86,6 +90,42 @@ export async function POST(req: Request) {
     const chapterAccuracy: Record<string, number> = {};
     for (const [ch, stats] of Object.entries(chapterStats)) {
       chapterAccuracy[ch] = Math.round((stats.correct / stats.total) * 100);
+    }
+
+    if (user) {
+      try {
+        const testType = questions[0]?.sourceSection ? 'youtube_test' : 'custom_test';
+        const testTitle = questions[0]?.chapter || 'Mixed Science Test';
+        
+        await serverSupabase.from('student_activity').insert({
+          user_id: user.id,
+          event_type: testType + '_completed',
+          metadata_json: { score: correctCount, total: questions.length }
+        });
+        
+        const { data: attempt } = await serverSupabase.from('test_attempts').insert({
+          user_id: user.id,
+          test_type: testType,
+          title: testTitle,
+          subject: 'Science',
+          total_questions: questions.length,
+          correct_answers: correctCount,
+          score_percentage: Math.round((correctCount / questions.length) * 100)
+        }).select().single();
+        
+        if (attempt && evaluatedQuestions.length > 0) {
+           const questionsToInsert = evaluatedQuestions.map(eq => ({
+             attempt_id: attempt.id,
+             question_id: eq.id || null,
+             chapter: eq.chapter,
+             topic: eq.topic,
+             is_correct: eq.isCorrect
+           }));
+           await serverSupabase.from('test_attempt_questions').insert(questionsToInsert);
+        }
+      } catch (err) {
+        console.error('Failed to log test attempt', err);
+      }
     }
 
     return NextResponse.json({

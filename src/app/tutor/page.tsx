@@ -5,6 +5,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
+import { createClient } from '@/utils/supabase/client';
+import AuthPrompt from '@/components/AuthPrompt';
 
 type Message = {
   id: string;
@@ -16,6 +18,7 @@ type Message = {
 };
 
 export default function TutorPage() {
+  const [user, setUser] = useState<any>('loading');
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
@@ -142,6 +145,13 @@ export default function TutorPage() {
   }, [messages, shouldAutoScroll]);
 
   useEffect(() => {
+    const checkUser = async () => {
+      const supabase = createClient();
+      const { data } = await supabase.auth.getUser();
+      setUser(data.user);
+    };
+    checkUser();
+
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const prefill = params.get('prefill');
@@ -236,6 +246,14 @@ export default function TutorPage() {
     ]);
     setError(null);
   };
+
+  if (user === 'loading') {
+     return <div className="flex h-[calc(100vh-4rem)] items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+  }
+  
+  if (!user) {
+     return <AuthPrompt />;
+  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] max-w-5xl mx-auto p-4 sm:p-6 w-full">

@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Payload too large.' }, { status: 413 });
     }
 
-    const { videoUrl, count, difficulty, questionType } = JSON.parse(bodyText);
+    const { videoUrl, count, difficulty, questionType, language } = JSON.parse(bodyText);
 
     if (!videoUrl) {
        return NextResponse.json({ error: 'YouTube URL is required.' }, { status: 400 });
@@ -61,10 +61,48 @@ export async function POST(req: Request) {
     // 1. Fetch Transcript
     let transcriptItems;
     try {
-      transcriptItems = await YoutubeTranscript.fetchTranscript(videoId);
+      const targetLang = language || 'en';
+      try {
+        transcriptItems = await YoutubeTranscript.fetchTranscript(videoId, { lang: targetLang });
+      } catch (err: any) {
+        if (err.name === 'YoutubeTranscriptNotAvailableLanguageError' || err.constructor?.name === 'YoutubeTranscriptNotAvailableLanguageError') {
+          const match = err.message.match(/Available languages: (.+)/);
+          const langs = match ? match[1].split(',').map((l: string) => l.trim()) : [];
+          
+          const baseLang = targetLang.split('-')[0];
+          const variant = langs.find((l: string) => l.startsWith(baseLang));
+          
+          if (variant) {
+            transcriptItems = await YoutubeTranscript.fetchTranscript(videoId, { lang: variant });
+          } else if (langs.some((l: string) => l.startsWith('en'))) {
+            const enVariant = langs.find((l: string) => l.startsWith('en'));
+            transcriptItems = await YoutubeTranscript.fetchTranscript(videoId, { lang: enVariant });
+          } else {
+            return NextResponse.json({ 
+              error: `A transcript exists, but not in the selected language. Available: ${langs.join(', ')}` 
+            }, { status: 400 });
+          }
+        } else {
+          throw err;
+        }
+      }
     } catch (err: any) {
       console.error("Transcript fetch error:", err);
-      return NextResponse.json({ error: 'Transcript unavailable for this video. Please ensure the video has closed captions enabled.' }, { status: 400 });
+      const errName = err.name || err.constructor?.name;
+      
+      if (errName === 'YoutubeTranscriptNotAvailableError') {
+        return NextResponse.json({ error: "This video does not currently have an accessible transcript." }, { status: 400 });
+      } else if (errName === 'YoutubeTranscriptDisabledError') {
+        return NextResponse.json({ error: "This video's captions are unavailable." }, { status: 400 });
+      } else if (errName === 'YoutubeTranscriptVideoUnavailableError' || (errName === 'YoutubeTranscriptError' && err.message.includes('Impossible to retrieve'))) {
+        return NextResponse.json({ error: "This YouTube video is unavailable." }, { status: 400 });
+      } else if (errName === 'YoutubeTranscriptTooManyRequestError') {
+        return NextResponse.json({ error: "YouTube is temporarily limiting transcript access. Please try again later." }, { status: 429 });
+      } else if (errName === 'YoutubeTranscriptNotAvailableLanguageError') {
+        return NextResponse.json({ error: "A transcript exists, but not in the selected language." }, { status: 400 });
+      }
+      
+      return NextResponse.json({ error: "We couldn't retrieve this video's transcript right now." }, { status: 500 });
     }
 
     if (!transcriptItems || transcriptItems.length === 0) {
@@ -85,12 +123,28 @@ export async function POST(req: Request) {
       // Decode basic HTML entities that might appear
       let text = item.text.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
       if (text) {
-         // rough minutes:seconds
-         const totalSeconds = Math.floor(item.offset / 1000);
-         const minutes = Math.floor(totalSeconds / 60);
-         const seconds = totalSeconds % 60;
-         const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-         fullTranscript += `[${timeString}] ${text}\n`;
+         const startMs = item.offset;
+         const durMs = item.duration;
+         
+         const formatTime = (ms: number) => {
+            const totalSec = Math.floor(ms / 1000);
+            const m = Math.floor(totalSec / 60);
+            const s = totalSec % 60;
+            return `${m}:${s.toString().padStart(2, '0')}`;
+         };
+
+         if (typeof startMs === 'number') {
+            const startStr = formatTime(startMs);
+            if (typeof durMs === 'number' && durMs > 0) {
+                const endStr = formatTime(startMs + durMs);
+                fullTranscript += `[${startStr} - ${endStr}] ${text}\n`;
+            } else {
+                fullTranscript += `[${startStr}] ${text}\n`;
+            }
+         } else {
+            // Fallback if no timestamps
+            fullTranscript += `[Section] ${text}\n`;
+         }
       }
     }
 

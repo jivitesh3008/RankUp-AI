@@ -2,6 +2,9 @@
 import { useState } from 'react';
 import { BookOpen, CheckCircle2, ChevronLeft, ChevronRight, XCircle, AlertCircle, Loader2, Play, Bot } from 'lucide-react';
 import Link from 'next/link';
+import { createClient } from '@/utils/supabase/client';
+import AuthPrompt from '@/components/AuthPrompt';
+import { useEffect } from 'react';
 
 const ALL_CHAPTERS = [
   'Chemical Reactions and Equations',
@@ -38,6 +41,7 @@ type EvaluatedQuestion = Question & {
 type TestState = 'SETUP' | 'GENERATING' | 'TAKING' | 'EVALUATING' | 'RESULTS' | 'REVIEW';
 
 export default function CustomTestPage() {
+  const [user, setUser] = useState<any>('loading');
   const [view, setView] = useState<TestState>('SETUP');
   
   const [selectedChapters, setSelectedChapters] = useState<string[]>([]);
@@ -55,6 +59,15 @@ export default function CustomTestPage() {
   const [percentage, setPercentage] = useState(0);
   const [weakestTopic, setWeakestTopic] = useState<string>('');
   const [chapterAccuracy, setChapterAccuracy] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const supabase = createClient();
+      const { data } = await supabase.auth.getUser();
+      setUser(data.user);
+    };
+    checkUser();
+  }, []);
 
   const toggleChapter = (ch: string) => {
     if (selectedChapters.includes(ch)) {
@@ -147,6 +160,14 @@ export default function CustomTestPage() {
   };
 
   const currentQ = questions[currentQuestionIdx];
+
+  if (user === 'loading') {
+     return <div className="flex h-[calc(100vh-4rem)] items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+  }
+  
+  if (!user) {
+     return <AuthPrompt />;
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 w-full font-sans">
