@@ -7,15 +7,18 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { createClient } from '@/utils/supabase/client';
 import AuthPrompt from '@/components/AuthPrompt';
+import { compressImage } from '@/lib/image';
 
 type Message = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  image?: string;
-  mimeType?: string;
+  images?: { base64: string, mimeType: string }[];
   imageContext?: any;
 };
+
+const MAX_IMAGES_PER_MESSAGE = 10;
+const MAX_TOTAL_IMAGE_BYTES = 4.5 * 1024 * 1024; // 4.5 MB compressed safety limit
 
 export default function TutorPage() {
   const [user, setUser] = useState<any>('loading');
@@ -27,11 +30,10 @@ export default function TutorPage() {
     }
   ]);
   const [input, setInput] = useState('');
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [selectedImageMime, setSelectedImageMime] = useState<string | null>(null);
+  const [selectedImages, setSelectedImages] = useState<{ id: string, base64: string, mimeType: string, bytes: number }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [subject, setSubject] = useState('Mathematics');
+  const [subject, setSubject] = useState('Science');
   
   const [isCompressing, setIsCompressing] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
@@ -47,95 +49,52 @@ export default function TutorPage() {
     setShouldAutoScroll(isNearBottom);
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
 
-    if (file.size > 15 * 1024 * 1024) {
-      setError('Original image is too large. Please select an image under 15MB.');
-      e.target.value = '';
+    if (selectedImages.length + files.length > MAX_IMAGES_PER_MESSAGE) {
+      setError(`You can add up to ${MAX_IMAGES_PER_MESSAGE} images at a time.`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
     setIsCompressing(true);
     setError(null);
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      const img = new window.Image();
-      
-      img.onload = () => {
-        const MAX_DIMENSION = 2500;
-        let width = img.width;
-        let height = img.height;
+    const newImages = [...selectedImages];
+    let totalBytes = newImages.reduce((acc, img) => acc + img.bytes, 0);
 
-        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
-          if (width > height) {
-            height = Math.round((height * MAX_DIMENSION) / width);
-            width = MAX_DIMENSION;
-          } else {
-            width = Math.round((width * MAX_DIMENSION) / height);
-            height = MAX_DIMENSION;
-          }
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          setError('Failed to process image. Please try another.');
-          setIsCompressing(false);
-          return;
-        }
-
-        let targetMime = file.type;
-        if (targetMime === 'image/png') {
-           ctx.fillStyle = '#ffffff';
-           ctx.fillRect(0, 0, width, height);
-           targetMime = 'image/jpeg';
+    try {
+      for (const file of files) {
+        const { base64, mimeType } = await compressImage(file);
+        const sizeInBytes = (base64.length * 3) / 4;
+        
+        if (totalBytes + sizeInBytes > MAX_TOTAL_IMAGE_BYTES) {
+           throw new Error('These images are too large to send together. Please remove one or more images or choose smaller photos.');
         }
         
-        ctx.drawImage(img, 0, 0, width, height);
+        totalBytes += sizeInBytes;
+        newImages.push({
+          id: (Date.now() + Math.random()).toString(),
+          base64,
+          mimeType,
+          bytes: sizeInBytes
+        });
+      }
+      setSelectedImages(newImages);
+    } catch (err: any) {
+      setError(err.message || 'Failed to process images');
+    } finally {
+      setIsCompressing(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
-        const quality = 0.85;
-        const compressedDataUrl = canvas.toDataURL(targetMime, quality);
-        
-        const sizeInBytes = (compressedDataUrl.length * 3) / 4;
-
-        if (sizeInBytes > 5 * 1024 * 1024) {
-           setError('Even after compression, the image is too large. Please choose a smaller image.');
-           setIsCompressing(false);
-           return;
-        }
-
-        const match = compressedDataUrl.match(/^data:(image\/[a-zA-Z0-9.-]+);base64,(.+)$/);
-        if (match) {
-          setSelectedImageMime(match[1]);
-          setSelectedImage(match[2]);
-        } else {
-          setError('Failed to compress image.');
-        }
-        setIsCompressing(false);
-      };
-      
-      img.onerror = () => {
-        setError('Invalid or corrupted image file.');
-        setIsCompressing(false);
-      };
-      
-      img.src = result;
-    };
-    
-    reader.onerror = () => {
-       setError('Failed to read file.');
-       setIsCompressing(false);
-    };
-    
-    reader.readAsDataURL(file);
-    e.target.value = '';
+  const removeImage = (idToRemove: string) => {
+    setSelectedImages(prev => prev.filter(img => img.id !== idToRemove));
   };
 
   useEffect(() => {
@@ -157,26 +116,24 @@ export default function TutorPage() {
       const prefill = params.get('prefill');
       if (prefill) {
         setInput(prefill);
-        // Clean up URL so it doesn't persist on refresh
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     }
   }, []);
 
   const handleSend = async () => {
-    if (!input.trim() && !selectedImage) return;
+    if (!input.trim() && selectedImages.length === 0) return;
     
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
       content: input.trim(),
-      ...(selectedImage && selectedImageMime ? { image: selectedImage, mimeType: selectedImageMime } : {})
+      ...(selectedImages.length > 0 ? { images: selectedImages.map(i => ({ base64: i.base64, mimeType: i.mimeType })) } : {})
     };
     
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
-    setSelectedImage(null);
-    setSelectedImageMime(null);
+    setSelectedImages([]);
     setIsLoading(true);
     setError(null);
     
@@ -195,7 +152,8 @@ export default function TutorPage() {
           messages: [...messages, userMessage].map(m => ({ 
             role: m.role, 
             content: m.content,
-            ...(m.id === userMessage.id ? { image: m.image, mimeType: m.mimeType } : {}),
+            // Only send raw base64 images for the NEW message to save history payload limits
+            ...(m.id === userMessage.id && m.images ? { images: m.images } : {}),
             imageContext: m.imageContext
           })),
         }),
@@ -208,7 +166,6 @@ export default function TutorPage() {
       }
       
       if (data.imageContext) {
-        // Update user message with processed image context
         setMessages((prev) => prev.map(m => m.id === userMessage.id ? { ...m, imageContext: data.imageContext } : m));
       }
       
@@ -248,7 +205,7 @@ export default function TutorPage() {
   };
 
   if (user === 'loading') {
-     return <div className="flex h-[calc(100vh-4rem)] items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+     return <div className="flex h-[calc(100vh-4rem)] items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-teal-600" /></div>;
   }
   
   if (!user) {
@@ -259,22 +216,22 @@ export default function TutorPage() {
     <div className="flex flex-col h-[calc(100vh-4rem)] max-w-5xl mx-auto p-4 sm:p-6 w-full">
       <div className="flex justify-between items-center mb-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">RankUp Tutor</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Let's solve it together.</p>
+          <h1 className="text-2xl font-bold font-outfit text-stone-900 dark:text-stone-100">RankUp Tutor</h1>
+          <p className="text-sm text-stone-500 dark:text-stone-400">Let's work through it together.</p>
         </div>
         <div className="flex items-center gap-4">
           <select 
             value={subject} 
             onChange={(e) => setSubject(e.target.value)}
-            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-indigo-500"
+            className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg px-3 py-2 text-sm text-stone-700 dark:text-stone-300 outline-none focus:border-teal-500"
           >
-            <option>Mathematics</option>
             <option>Science</option>
+            <option>Mathematics</option>
             <option>English</option>
           </select>
           <button 
             onClick={clearChat}
-            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+            className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
             title="Clear conversation"
           >
             <Trash2 className="w-5 h-5" />
@@ -282,7 +239,7 @@ export default function TutorPage() {
         </div>
       </div>
 
-      <div className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-sm">
+      <div className="flex-1 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl flex flex-col overflow-hidden shadow-sm">
         <div 
           className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6"
           ref={chatContainerRef}
@@ -291,34 +248,41 @@ export default function TutorPage() {
           {messages.map((msg) => (
             <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               {msg.role === 'assistant' && (
-                <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center shrink-0">
-                  <Bot className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                <div className="w-8 h-8 rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center shrink-0 border border-stone-200 dark:border-stone-700">
+                  <Bot className="w-5 h-5 text-stone-600 dark:text-stone-400" />
                 </div>
               )}
-              <div className={`max-w-[80%] rounded-2xl px-5 py-3 ${
+              <div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-5 py-3.5 ${
                 msg.role === 'user' 
-                  ? 'bg-indigo-600 text-white rounded-br-sm' 
-                  : 'bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-bl-sm'
+                  ? 'bg-teal-600 text-white rounded-br-sm shadow-sm' 
+                  : 'bg-stone-50 dark:bg-stone-800 text-stone-800 dark:text-stone-200 rounded-bl-sm border border-stone-100 dark:border-stone-700 shadow-sm'
               }`}>
-                {msg.imageContext && !msg.image && (
-                   <div className="flex items-center gap-1.5 mb-2 text-indigo-200 text-xs font-medium">
+                {msg.imageContext && (!msg.images || msg.images.length === 0) && (
+                   <div className="flex items-center gap-1.5 mb-2 text-teal-200 text-xs font-medium">
                      <CheckCircle2 className="w-3.5 h-3.5" />
                      <span>Image context reused</span>
                    </div>
                 )}
-                {msg.image && (
-                  <div className="mb-2">
-                    <img src={`data:${msg.mimeType};base64,${msg.image}`} alt="Uploaded content" className="max-h-64 rounded-lg object-contain" />
+                {msg.images && msg.images.length > 0 && (
+                  <div className="mb-3 flex flex-wrap gap-3">
+                    {msg.images.map((img, idx) => (
+                      <div key={idx} className="relative">
+                        <div className="absolute top-1 left-1 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md z-10 backdrop-blur-sm">
+                          {idx + 1}
+                        </div>
+                        <img src={`data:${img.mimeType};base64,${img.base64}`} alt={`Attached content ${idx + 1}`} className="max-h-48 rounded-xl object-contain border border-teal-500/30" />
+                      </div>
+                    ))}
                   </div>
                 )}
-                {msg.imageContext && msg.image && (
-                   <div className="flex items-center gap-1.5 mt-2 text-indigo-200 text-xs font-medium bg-indigo-700/50 px-2 py-1.5 rounded-md inline-flex">
+                {msg.imageContext && msg.images && msg.images.length > 0 && (
+                   <div className="flex items-center gap-1.5 mt-2 text-teal-100 text-xs font-medium bg-teal-700/50 px-2 py-1.5 rounded-lg inline-flex">
                      <CheckCircle2 className="w-3.5 h-3.5" />
-                     <span>Image analyzed successfully</span>
+                     <span>{msg.images.length} image{msg.images.length > 1 ? 's' : ''} analyzed</span>
                    </div>
                 )}
                 {msg.role === 'assistant' ? (
-                  <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_.math-display]:overflow-x-auto [&_.math-display]:overflow-y-hidden [&_.math-display]:py-2 [&_.math-display]:scrollbar-thin [&_.math-display]:scrollbar-thumb-slate-300 dark:[&_.math-display]:scrollbar-thumb-slate-600">
+                  <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_.math-display]:overflow-x-auto [&_.math-display]:overflow-y-hidden [&_.math-display]:py-2 [&_.math-display]:scrollbar-thin [&_.math-display]:scrollbar-thumb-stone-300 dark:[&_.math-display]:scrollbar-thumb-stone-600">
                     <ReactMarkdown
                       remarkPlugins={[remarkMath]}
                       rehypePlugins={[rehypeKatex]}
@@ -331,8 +295,8 @@ export default function TutorPage() {
                 )}
               </div>
               {msg.role === 'user' && (
-                <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0">
-                  <User className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                <div className="w-8 h-8 rounded-full bg-stone-200 dark:bg-stone-700 flex items-center justify-center shrink-0">
+                  <User className="w-5 h-5 text-stone-500 dark:text-stone-400" />
                 </div>
               )}
             </div>
@@ -340,20 +304,20 @@ export default function TutorPage() {
           
           {isLoading && (
             <div className="flex gap-4 justify-start">
-              <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center shrink-0">
-                <Bot className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              <div className="w-8 h-8 rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center shrink-0 border border-stone-200 dark:border-stone-700">
+                <Bot className="w-5 h-5 text-stone-600 dark:text-stone-400" />
               </div>
-              <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl rounded-bl-sm px-5 py-4 flex items-center gap-3">
-                <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
-                <span className="text-sm text-slate-600 dark:text-slate-300 font-medium">
-                  {messages[messages.length - 1]?.image || messages[messages.length - 1]?.imageContext ? 'Analyzing image...' : 'Thinking...'}
+              <div className="bg-stone-50 dark:bg-stone-800 rounded-2xl rounded-bl-sm px-5 py-4 flex items-center gap-3 border border-stone-100 dark:border-stone-700 shadow-sm">
+                <Loader2 className="w-4 h-4 text-stone-400 animate-spin" />
+                <span className="text-sm text-stone-500 dark:text-stone-400 font-medium">
+                  {messages[messages.length - 1]?.images?.length || messages[messages.length - 1]?.imageContext ? 'Analyzing image...' : 'Thinking...'}
                 </span>
               </div>
             </div>
           )}
 
           {error && (
-            <div className="flex items-center gap-2 text-red-500 bg-red-50 dark:bg-red-900/20 p-4 rounded-xl text-sm">
+            <div className="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 p-4 rounded-xl text-sm border border-red-100 dark:border-red-900/50">
               <AlertCircle className="w-5 h-5 shrink-0" />
               <p>{error}</p>
             </div>
@@ -362,65 +326,79 @@ export default function TutorPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
-          <div className="flex items-end gap-2 max-w-4xl mx-auto">
+        <div className="p-4 bg-white dark:bg-stone-900 border-t border-stone-100 dark:border-stone-800">
+          <div className="flex items-end gap-3 max-w-4xl mx-auto">
             <input 
               type="file" 
               accept="image/jpeg, image/png, image/webp" 
               className="hidden" 
               ref={fileInputRef} 
               onChange={handleImageChange} 
+              multiple
             />
             <button 
               onClick={() => fileInputRef.current?.click()}
-              className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors shrink-0"
-              title="Upload image"
+              className="p-3.5 text-stone-400 hover:text-teal-600 hover:bg-stone-50 dark:hover:bg-stone-800 rounded-xl transition-colors shrink-0 flex flex-col items-center justify-center"
+              title="Add photos"
             >
-              <ImageIcon className="w-6 h-6" />
+              <ImageIcon className="w-6 h-6 mb-0.5" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Photos</span>
             </button>
             <div className="flex-1 relative flex flex-col">
               {isCompressing ? (
-                <div className="relative inline-block mb-2 self-start p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center gap-3">
-                  <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
-                  <span className="text-sm text-slate-600 dark:text-slate-300 font-medium">Optimizing image...</span>
+                <div className="relative inline-flex mb-3 self-start px-3 py-2 bg-stone-50 dark:bg-stone-800 rounded-lg border border-stone-200 dark:border-stone-700 items-center gap-2">
+                  <Loader2 className="w-4 h-4 text-stone-400 animate-spin" />
+                  <span className="text-xs text-stone-500 font-medium">Optimizing images...</span>
                 </div>
-              ) : selectedImage ? (
-                <div className="relative inline-block mb-2 self-start p-2 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center gap-2 mb-2 px-1">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                    <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Image ready</span>
-                  </div>
-                  <img src={`data:${selectedImageMime};base64,${selectedImage}`} alt="Preview" className="h-20 w-auto rounded-md object-contain" />
-                  <button 
-                    onClick={() => { setSelectedImage(null); setSelectedImageMime(null); }} 
-                    className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-sm transition-colors"
-                    title="Remove image"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
+              ) : selectedImages.length > 0 ? (
+                <div className="flex gap-3 mb-3 self-start overflow-x-auto max-w-full pb-2 scrollbar-thin scrollbar-thumb-stone-200 dark:scrollbar-thumb-stone-700 w-full pr-14">
+                  {selectedImages.map((img, idx) => (
+                    <div key={img.id} className="relative shrink-0 p-2 bg-stone-50 dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 shadow-sm">
+                      <div className="absolute top-1 left-1 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md z-10 backdrop-blur-sm">
+                        {idx + 1}
+                      </div>
+                      <img src={`data:${img.mimeType};base64,${img.base64}`} alt={`Preview ${idx + 1}`} className="h-16 w-auto rounded-lg object-contain" />
+                      <button 
+                        onClick={() => removeImage(img.id)} 
+                        className="absolute -top-2 -right-2 bg-stone-900 dark:bg-stone-700 hover:bg-red-500 text-white rounded-full p-1 shadow-sm transition-colors z-10"
+                        title="Remove image"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                  {selectedImages.length < MAX_IMAGES_PER_MESSAGE && (
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="shrink-0 h-[84px] w-[84px] flex flex-col items-center justify-center gap-1 bg-stone-50 dark:bg-stone-800/50 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl border border-dashed border-stone-300 dark:border-stone-700 transition-colors text-stone-500 dark:text-stone-400"
+                    >
+                       <span className="text-xl leading-none">+</span>
+                       <span className="text-xs font-medium uppercase tracking-wider">Add</span>
+                    </button>
+                  )}
                 </div>
               ) : null}
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Type your question here... (e.g. I don't understand Ohm's Law)"
-                className="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-2xl px-4 py-3 sm:py-4 pr-12 focus:ring-2 focus:ring-indigo-500 outline-none resize-none overflow-hidden text-slate-900 dark:text-white"
+                placeholder="Message RankUp Tutor..."
+                className="w-full bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-2xl px-4 py-3.5 pr-14 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none resize-none overflow-hidden text-stone-900 dark:text-white transition-shadow"
                 rows={1}
                 style={{ minHeight: '52px', maxHeight: '120px' }}
               />
               <button
                 onClick={handleSend}
-                disabled={(!input.trim() && !selectedImage) || isLoading || isCompressing}
-                className="absolute right-2 bottom-2 p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 transition-colors"
+                disabled={(!input.trim() && selectedImages.length === 0) || isLoading || isCompressing}
+                className="absolute right-2 bottom-2 p-2 bg-teal-600 text-white rounded-xl hover:bg-teal-700 disabled:opacity-50 disabled:hover:bg-teal-600 transition-all shadow-sm"
               >
                 <Send className="w-5 h-5" />
               </button>
             </div>
           </div>
-          <p className="text-center text-xs text-slate-400 mt-3">
-            RankUp AI can make mistakes. Always verify important information.
-          </p>
+          <div className="text-center mt-3">
+            <span className="text-[11px] text-stone-400 font-medium">RankUp AI can make mistakes. Verify important facts.</span>
+          </div>
         </div>
       </div>
     </div>

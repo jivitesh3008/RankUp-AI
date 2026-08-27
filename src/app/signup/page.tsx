@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { BookOpen } from 'lucide-react';
 
@@ -13,14 +13,29 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
+
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [resendError, setResendError] = useState(false);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (resendCooldown > 0) {
+      timer = setTimeout(() => setResendCooldown(c => c - 1), 1000);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [resendCooldown]);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setMessage(null);
+    setMessage(false);
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
@@ -51,40 +66,85 @@ export default function SignupPage() {
       return;
     }
 
-    setMessage('Check your email to verify your RankUp account.');
+    setMessage(true);
     setLoading(false);
   };
 
+  const handleResend = async () => {
+    setResendLoading(true);
+    setResendMessage(null);
+    setResendError(false);
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+    });
+
+    setResendLoading(false);
+
+    if (error) {
+      setResendError(true);
+      setResendMessage('We couldn\'t resend the email right now. Please try again in a moment.');
+    } else {
+      setResendError(false);
+      setResendMessage('Verification email sent. Please check your inbox.');
+      setResendCooldown(45);
+    }
+  };
+
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="flex min-h-[calc(100vh-4rem)] flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <BookOpen className="h-10 w-10 text-indigo-600 dark:text-indigo-400" />
+          <BookOpen className="h-10 w-10 text-teal-600 dark:text-teal-400" />
         </div>
-        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-          Create your RankUp account
+        <h2 className="mt-6 text-center text-3xl font-bold font-outfit tracking-tight text-stone-900 dark:text-stone-100">
+          Create your account
         </h2>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white dark:bg-slate-900 py-8 px-4 shadow-sm border border-slate-100 dark:border-slate-800 sm:rounded-3xl sm:px-10">
+        <div className="bg-white dark:bg-stone-900 py-8 px-4 shadow-sm border border-stone-200 dark:border-stone-800 sm:rounded-3xl sm:px-10">
           {message ? (
-            <div className="text-center py-8">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
-                <svg className="h-6 w-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                </svg>
+            <div className="text-center py-4">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-teal-50 dark:bg-teal-900/20 mb-6">
+                <span className="text-3xl">📩</span>
               </div>
-              <h3 className="mt-3 text-lg font-medium text-slate-900 dark:text-white">Account Created</h3>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{message}</p>
-              <div className="mt-6">
-                <Link href="/login" className="text-indigo-600 hover:text-indigo-500 font-medium">Return to Login</Link>
+              <h3 className="text-2xl font-bold font-outfit text-stone-900 dark:text-stone-100 mb-2">Check your email</h3>
+              <p className="text-stone-600 dark:text-stone-400 mb-8">
+                We've sent a verification link to:<br/>
+                <span className="font-semibold text-stone-900 dark:text-stone-100 mt-1 block">{email}</span>
+                <span className="block mt-4 text-sm">Please verify your email before logging in.</span>
+              </p>
+              
+              <div className="space-y-4">
+                <div className="pt-6 border-t border-stone-100 dark:border-stone-800">
+                  <p className="text-sm text-stone-600 dark:text-stone-400 mb-4">Didn't receive the email?</p>
+                  <button
+                    onClick={handleResend}
+                    disabled={resendLoading || resendCooldown > 0}
+                    className="w-full flex justify-center py-2.5 px-4 border border-teal-600 rounded-xl text-sm font-medium text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {resendLoading ? 'Sending...' : resendCooldown > 0 ? `Resend available in ${resendCooldown}s` : 'Resend verification email'}
+                  </button>
+                  {resendMessage && (
+                    <p className={`mt-3 text-sm ${resendError ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                      {resendMessage}
+                    </p>
+                  )}
+                </div>
+                <div className="pt-2">
+                  <Link href="/login" className="inline-block text-sm font-medium text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300 transition-colors">
+                    Back to Login
+                  </Link>
+                </div>
               </div>
             </div>
           ) : (
-            <form className="space-y-6" onSubmit={handleSignup}>
+            <form className="space-y-5" onSubmit={handleSignup}>
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                <label htmlFor="name" className="block text-sm font-medium text-stone-700 dark:text-stone-300">
                   Name
                 </label>
                 <div className="mt-1">
@@ -95,13 +155,13 @@ export default function SignupPage() {
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="block w-full appearance-none rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 placeholder-slate-400 dark:bg-slate-800 dark:text-white shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
+                    className="block w-full appearance-none rounded-xl border border-stone-300 dark:border-stone-700 px-4 py-3 placeholder-stone-400 dark:bg-stone-800 dark:text-white shadow-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 sm:text-sm transition-shadow"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                <label htmlFor="email" className="block text-sm font-medium text-stone-700 dark:text-stone-300">
                   Email
                 </label>
                 <div className="mt-1">
@@ -113,13 +173,13 @@ export default function SignupPage() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="block w-full appearance-none rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 placeholder-slate-400 dark:bg-slate-800 dark:text-white shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
+                    className="block w-full appearance-none rounded-xl border border-stone-300 dark:border-stone-700 px-4 py-3 placeholder-stone-400 dark:bg-stone-800 dark:text-white shadow-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 sm:text-sm transition-shadow"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                <label htmlFor="password" className="block text-sm font-medium text-stone-700 dark:text-stone-300">
                   Password
                 </label>
                 <div className="mt-1">
@@ -130,13 +190,13 @@ export default function SignupPage() {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="block w-full appearance-none rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 placeholder-slate-400 dark:bg-slate-800 dark:text-white shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
+                    className="block w-full appearance-none rounded-xl border border-stone-300 dark:border-stone-700 px-4 py-3 placeholder-stone-400 dark:bg-stone-800 dark:text-white shadow-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 sm:text-sm transition-shadow"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-stone-700 dark:text-stone-300">
                   Confirm Password
                 </label>
                 <div className="mt-1">
@@ -147,22 +207,22 @@ export default function SignupPage() {
                     required
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="block w-full appearance-none rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 placeholder-slate-400 dark:bg-slate-800 dark:text-white shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
+                    className="block w-full appearance-none rounded-xl border border-stone-300 dark:border-stone-700 px-4 py-3 placeholder-stone-400 dark:bg-stone-800 dark:text-white shadow-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 sm:text-sm transition-shadow"
                   />
                 </div>
               </div>
 
               {error && (
-                <div className="text-red-600 dark:text-red-400 text-sm">{error}</div>
+                <div className="text-red-600 dark:text-red-400 text-sm font-medium">{error}</div>
               )}
 
-              <div>
+              <div className="pt-2">
                 <button
                   type="submit"
                   disabled={loading}
-                  className="flex w-full justify-center rounded-xl border border-transparent bg-indigo-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
+                  className="flex w-full justify-center rounded-xl border border-transparent bg-teal-600 py-3 px-4 text-sm font-medium text-white shadow-sm hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 disabled:opacity-50 transition-colors"
                 >
-                  {loading ? 'Creating...' : 'Create account'}
+                  {loading ? 'Creating account...' : 'Create account'}
                 </button>
               </div>
             </form>
@@ -170,8 +230,8 @@ export default function SignupPage() {
 
           {!message && (
              <div className="mt-6 text-center text-sm">
-               <span className="text-slate-500 dark:text-slate-400">Already have an account? </span>
-               <Link href="/login" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">Log in</Link>
+               <span className="text-stone-500 dark:text-stone-400">Already have an account? </span>
+               <Link href="/login" className="font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 transition-colors">Log in</Link>
              </div>
           )}
         </div>

@@ -1,5 +1,7 @@
 import { createClient } from '@/utils/supabase/server';
 import AuthPrompt from '@/components/AuthPrompt';
+import { Activity, BookOpen, BrainCircuit, CheckCircle2, Clock, FileCheck, Target, TrendingUp } from 'lucide-react';
+import Link from 'next/link';
 
 export default async function ProgressPage() {
   const supabase = await createClient();
@@ -16,6 +18,12 @@ export default async function ProgressPage() {
     .eq('user_id', user.id)
     .order('completed_at', { ascending: false });
 
+  const { data: evaluations } = await supabase
+    .from('answer_evaluations')
+    .select('id, question_text, chapter, topic, total_marks, estimated_marks, confidence, created_at')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false });
+
   const { data: activity } = await supabase
     .from('student_activity')
     .select('id, event_type, chapter, created_at')
@@ -27,6 +35,7 @@ export default async function ProgressPage() {
   const questionsPracticed = attempts?.reduce((acc, curr) => acc + curr.total_questions, 0) || 0;
   const correctQuestions = attempts?.reduce((acc, curr) => acc + curr.correct_answers, 0) || 0;
   const overallAccuracy = questionsPracticed > 0 ? Math.round((correctQuestions / questionsPracticed) * 100) : 0;
+  const evaluationsCompleted = evaluations?.length || 0;
 
   // Chapter Performance (mocked aggregation for now, could be done via RPC)
   const chapterStats: Record<string, { total: number, correct: number }> = {};
@@ -44,85 +53,165 @@ export default async function ProgressPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-4rem)] p-4 sm:p-6 max-w-5xl mx-auto w-full">
+    <div className="flex flex-col min-h-[calc(100vh-4rem)] p-4 sm:p-6 max-w-5xl mx-auto w-full font-sans">
       <div className="mb-8">
-         <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">My Progress</h1>
-         <p className="text-slate-600 dark:text-slate-400">Welcome back, let's see how you're doing.</p>
+         <h1 className="text-3xl font-bold font-outfit text-stone-900 dark:text-stone-100 flex items-center gap-3 mb-2">
+           <TrendingUp className="w-8 h-8 text-teal-600" />
+           My Progress
+         </h1>
+         <p className="text-stone-500 dark:text-stone-400">Welcome back. Here's a snapshot of your learning journey.</p>
       </div>
       
-      {testsCompleted === 0 && (!activity || activity.length === 0) ? (
-        <div className="bg-white dark:bg-slate-900 p-8 md:p-12 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 text-center">
-          <p className="text-slate-600 dark:text-slate-400">
-            Your progress will appear here once you start learning. Try asking a doubt or creating a test!
+      {testsCompleted === 0 && evaluationsCompleted === 0 && (!activity || activity.length === 0) ? (
+        <div className="bg-stone-50 dark:bg-stone-800/30 p-8 md:p-12 rounded-3xl border border-dashed border-stone-300 dark:border-stone-700 text-center flex flex-col items-center justify-center min-h-[400px]">
+          <Activity className="w-12 h-12 text-stone-300 dark:text-stone-600 mb-4" />
+          <h3 className="text-lg font-medium font-outfit text-stone-700 dark:text-stone-300 mb-2">Want feedback on your written answers?</h3>
+          <p className="text-stone-500 dark:text-stone-400 max-w-sm mb-6">
+            Upload a handwritten answer and see where you can improve.
           </p>
+          <Link href="/answer-evaluation" className="px-6 py-3 bg-teal-600 text-white rounded-xl text-sm font-medium hover:bg-teal-700 transition-colors shadow-sm">
+            Check My Answer
+          </Link>
         </div>
       ) : (
-        <div className="space-y-8">
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
-              <div className="text-sm text-slate-500 dark:text-slate-400 mb-1">Tests completed</div>
-              <div className="text-3xl font-bold text-slate-900 dark:text-white">{testsCompleted}</div>
+        <div className="space-y-12">
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
+            <div>
+              <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400 mb-2">
+                <Target className="w-4 h-4" />
+                <span className="text-xs font-semibold uppercase tracking-wider">Accuracy</span>
+              </div>
+              <div className="text-4xl font-bold font-outfit text-stone-900 dark:text-stone-100">{overallAccuracy}%</div>
             </div>
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
-              <div className="text-sm text-slate-500 dark:text-slate-400 mb-1">Questions attempted</div>
-              <div className="text-3xl font-bold text-slate-900 dark:text-white">{questionsPracticed}</div>
+            <div>
+              <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400 mb-2">
+                <BrainCircuit className="w-4 h-4" />
+                <span className="text-xs font-semibold uppercase tracking-wider">Tests</span>
+              </div>
+              <div className="text-4xl font-bold font-outfit text-stone-900 dark:text-stone-100">{testsCompleted}</div>
             </div>
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
-              <div className="text-sm text-slate-500 dark:text-slate-400 mb-1">Questions correct</div>
-              <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{correctQuestions}</div>
+            <div>
+              <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400 mb-2">
+                <BookOpen className="w-4 h-4" />
+                <span className="text-xs font-semibold uppercase tracking-wider">Questions</span>
+              </div>
+              <div className="text-4xl font-bold font-outfit text-stone-900 dark:text-stone-100">{questionsPracticed}</div>
             </div>
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
-              <div className="text-sm text-slate-500 dark:text-slate-400 mb-1">Overall accuracy</div>
-              <div className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">{overallAccuracy}%</div>
+            <div>
+              <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400 mb-2">
+                <FileCheck className="w-4 h-4" />
+                <span className="text-xs font-semibold uppercase tracking-wider">Evals</span>
+              </div>
+              <div className="text-4xl font-bold font-outfit text-stone-900 dark:text-stone-100">{evaluationsCompleted}</div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-             <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
-               <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Chapter Performance</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+             <div>
+               <h2 className="text-xl font-bold font-outfit text-stone-900 dark:text-stone-100 mb-6">Chapter Performance</h2>
                {Object.keys(chapterStats).length > 0 ? (
                  <div className="space-y-4">
                    {Object.entries(chapterStats).map(([ch, stats]) => {
                      const acc = Math.round((stats.correct / stats.total) * 100);
                      return (
-                       <div key={ch} className="flex items-center justify-between">
-                         <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate pr-4">{ch}</span>
-                         <span className="text-sm font-bold text-slate-900 dark:text-white">{acc}%</span>
+                       <div key={ch} className="group">
+                         <div className="flex items-center justify-between mb-1.5">
+                           <span className="text-sm font-medium text-stone-700 dark:text-stone-300 truncate pr-4">{ch}</span>
+                           <span className="text-sm font-bold text-stone-900 dark:text-stone-100">{acc}%</span>
+                         </div>
+                         <div className="h-1.5 w-full bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden">
+                           <div className="h-full bg-teal-500 rounded-full transition-all" style={{ width: `${acc}%`}}></div>
+                         </div>
                        </div>
                      );
                    })}
                  </div>
                ) : (
-                 <p className="text-sm text-slate-500">Take some tests to see your performance.</p>
+                 <p className="text-sm text-stone-500 bg-stone-50 dark:bg-stone-800/50 p-6 rounded-xl border border-stone-200 dark:border-stone-800">Take some tests to see your performance.</p>
                )}
              </div>
 
-             <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
-               <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Recent Activity</h2>
+             <div>
+               <h2 className="text-xl font-bold font-outfit text-stone-900 dark:text-stone-100 mb-6 flex items-center gap-2">
+                 <Clock className="w-5 h-5 text-stone-400" />
+                 Recent Activity
+               </h2>
                {activity && activity.length > 0 ? (
-                 <div className="space-y-4">
-                   {activity.map(act => (
-                     <div key={act.id} className="flex items-center gap-3">
-                       <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                 <div className="space-y-1">
+                   {activity.map((act, i) => (
+                     <div key={act.id} className="flex items-start gap-4 p-4 rounded-xl hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors">
+                       <div className="w-2 h-2 rounded-full bg-teal-500 mt-1.5 shrink-0"></div>
                        <div>
-                         <p className="text-sm font-medium text-slate-900 dark:text-white">
-                           {act.event_type === 'tutor_question' && 'Asked a doubt'}
-                           {act.event_type === 'image_question' && 'Uploaded an image'}
-                           {act.event_type === 'custom_test_completed' && 'Completed a custom test'}
-                           {act.event_type === 'youtube_test_completed' && 'Completed a YouTube test'}
+                         <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
+                           {act.event_type === 'tutor_question' && 'Asked a doubt in Tutor'}
+                           {act.event_type === 'image_question' && 'Uploaded an image to Tutor'}
+                           {act.event_type === 'custom_test_completed' && 'Completed a Custom Test'}
+                           {act.event_type === 'youtube_test_completed' && 'Completed a YouTube Test'}
+                           {act.event_type === 'answer_evaluation' && 'Evaluated a handwritten answer'}
                          </p>
-                         <p className="text-xs text-slate-500">
-                           {new Date(act.created_at).toLocaleDateString()}
+                         <p className="text-xs text-stone-500 mt-1">
+                           {new Date(act.created_at).toLocaleDateString()} {act.chapter ? `• ${act.chapter}` : ''}
                          </p>
                        </div>
                      </div>
                    ))}
                  </div>
                ) : (
-                 <p className="text-sm text-slate-500">No recent activity.</p>
+                 <p className="text-sm text-stone-500 bg-stone-50 dark:bg-stone-800/50 p-6 rounded-xl border border-stone-200 dark:border-stone-800">No recent activity.</p>
                )}
+              </div>
+           </div>
+
+          {evaluations && evaluations.length > 0 ? (
+            <div className="pt-8 border-t border-stone-200 dark:border-stone-800">
+               <div className="flex items-center justify-between mb-6">
+                 <h2 className="text-xl font-bold font-outfit text-stone-900 dark:text-stone-100">Answer Evaluations</h2>
+                 <Link href="/answer-evaluation" className="px-4 py-2 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 rounded-lg text-sm font-medium hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors">
+                   Check a new answer
+                 </Link>
+               </div>
+               <div className="space-y-3">
+                 {evaluations.map((ev: any) => (
+                   <div key={ev.id} className="p-5 rounded-2xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-800/30 flex flex-col sm:flex-row sm:items-center justify-between gap-6 hover:border-stone-300 dark:hover:border-stone-700 transition-colors">
+                     <div>
+                       <p className="text-base font-medium text-stone-900 dark:text-stone-100 line-clamp-1 mb-1">{ev.question_text || 'Handwritten Question'}</p>
+                       <p className="text-sm text-stone-500">{new Date(ev.created_at).toLocaleDateString()} • {ev.topic || ev.chapter || 'Unknown Topic'}</p>
+                     </div>
+                     <div className="flex items-center gap-6 shrink-0">
+                       <span className={`text-xs font-semibold uppercase tracking-wider px-2.5 py-1 rounded-md ${
+                         ev.confidence === 'High' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800/50 dark:text-emerald-400' : 
+                         ev.confidence === 'Low' ? 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:border-amber-800/50 dark:text-amber-400' : 
+                         'bg-stone-100 text-stone-700 border border-stone-200 dark:bg-stone-800 dark:border-stone-700 dark:text-stone-400'
+                       }`}>
+                         {ev.confidence || 'Unknown'} Conf
+                       </span>
+                       <div className="text-right border-l border-stone-200 dark:border-stone-700 pl-6">
+                         <div className="text-sm font-semibold uppercase tracking-wider text-stone-500 mb-0.5">Score</div>
+                         <div className="text-xl font-bold font-outfit text-teal-700 dark:text-teal-400">
+                           {ev.estimated_marks !== null ? ev.estimated_marks : '-'} <span className="text-sm font-normal text-stone-400">/ {ev.total_marks || '?'}</span>
+                         </div>
+                       </div>
+                     </div>
+                   </div>
+                 ))}
+               </div>
              </div>
-          </div>
+          ) : (
+            <div className="pt-8 border-t border-stone-200 dark:border-stone-800">
+               <h2 className="text-xl font-bold font-outfit text-stone-900 dark:text-stone-100 mb-6">Answer Evaluations</h2>
+               <div className="bg-stone-50 dark:bg-stone-800/30 p-8 rounded-2xl border border-dashed border-stone-300 dark:border-stone-700 text-center flex flex-col items-center justify-center">
+                 <FileCheck className="w-10 h-10 text-stone-300 dark:text-stone-600 mb-4" />
+                 <h3 className="text-lg font-medium font-outfit text-stone-700 dark:text-stone-300 mb-2">Want feedback on your written answers?</h3>
+                 <p className="text-stone-500 dark:text-stone-400 max-w-sm mb-6">
+                   Upload a handwritten answer and see where you can improve.
+                 </p>
+                 <Link href="/answer-evaluation" className="px-6 py-3 bg-teal-600 text-white rounded-xl text-sm font-medium hover:bg-teal-700 transition-colors shadow-sm">
+                   Check My Answer
+                 </Link>
+               </div>
+            </div>
+          )}
         </div>
       )}
     </div>

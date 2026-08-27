@@ -85,7 +85,7 @@ export async function POST(req: Request) {
     const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
     cleanupCache(responseCache);
-    const cacheKey = messages.length === 1 && lastUserMessage && !lastUserMessage.image && !lastUserMessage.imageContext ? lastUserMessage.content.trim() : null;
+    const cacheKey = messages.length === 1 && lastUserMessage && (!lastUserMessage.images || lastUserMessage.images.length === 0) && !lastUserMessage.imageContext ? lastUserMessage.content.trim() : null;
     if (cacheKey && responseCache.has(cacheKey)) {
         console.log("Response cache hit for:", cacheKey);
         return NextResponse.json(responseCache.get(cacheKey)!.data);
@@ -93,21 +93,21 @@ export async function POST(req: Request) {
 
     if (lastUserMessage) {
       // STAGE 1: Image Understanding
-      if (lastUserMessage.image && !lastUserMessage.imageContext) {
-        console.log("Running Stage 1: Multimodal Image Understanding");
+      if (lastUserMessage.images && lastUserMessage.images.length > 0 && !lastUserMessage.imageContext) {
+        console.log(`Running Stage 1: Multimodal Image Understanding for ${lastUserMessage.images.length} images`);
         try {
-          const imagePart = {
+          const imageParts = lastUserMessage.images.map((img: any) => ({
             inline_data: {
-              mime_type: lastUserMessage.mimeType || 'image/jpeg',
-              data: lastUserMessage.image
+              mime_type: img.mimeType || 'image/jpeg',
+              data: img.base64
             }
-          };
+          }));
           const promptPart = {
-            text: `Analyze this image for a Class 10 science tutor. Respond ONLY with a valid JSON object matching this schema (do not include markdown formatting or backticks):
+            text: `Analyze these images for a Class 10 science tutor. They may be parts of a single multi-page submission. Respond ONLY with a valid JSON object matching this schema (do not include markdown formatting or backticks):
 {
   "imageType": "handwritten_solution" | "textbook_question" | "diagram" | "other",
-  "questionText": "Any explicit question asked or printed in the image. Leave blank if none.",
-  "studentWork": "Transcribe any handwritten steps, reasoning, or calculations.",
+  "questionText": "Any explicit question asked or printed in the images. Leave blank if none.",
+  "studentWork": "Transcribe any handwritten steps, reasoning, or calculations across all images in order.",
   "diagramDescription": "Describe any diagrams, labels, or relationships present.",
   "equations": ["Equation 1", "Equation 2"],
   "likelySubject": "Science" | "Mathematics" | "English",
@@ -116,7 +116,7 @@ export async function POST(req: Request) {
           };
 
           const stage1Body = {
-            contents: [{ role: 'user', parts: [promptPart, imagePart] }],
+            contents: [{ role: 'user', parts: [promptPart, ...imageParts] }],
             generationConfig: { temperature: 0.1 }
           };
 
@@ -285,7 +285,8 @@ INSTRUCTIONS:
       chunksRetrieved: groundingData.chunks,
       topSimilarity: groundingData.scores[0] || null,
       httpStatus: response ? response.status : null,
-      retriesUsed: retriesUsed
+      retriesUsed: retriesUsed,
+      imageCount: lastUserMessage?.images?.length || 0
     }));
 
     if (!response || !response.ok) {
@@ -319,7 +320,7 @@ INSTRUCTIONS:
       try {
         await supabase.from('student_activity').insert({
           user_id: user.id,
-          event_type: lastUserMessage.image ? 'image_question' : 'tutor_question',
+          event_type: (lastUserMessage.images && lastUserMessage.images.length > 0) ? 'image_question' : 'tutor_question',
           chapter: groundingData.chapter || null,
           metadata_json: { query: (lastUserMessage.content || '').substring(0, 100) }
         });
