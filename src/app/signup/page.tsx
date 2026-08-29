@@ -216,7 +216,10 @@ export default function SignupPage() {
                 <div className="text-red-600 dark:text-red-400 text-sm font-medium">{error}</div>
               )}
 
-              <div className="pt-2">
+              <div className="pt-1">
+                <p className="text-xs text-stone-500 dark:text-stone-400 text-center mb-4 leading-relaxed">
+                  By creating an account, you agree to our <Link href="/terms" className="text-teal-600 dark:text-teal-400 hover:underline font-medium">Terms of Service</Link> and <Link href="/privacy" className="text-teal-600 dark:text-teal-400 hover:underline font-medium">Privacy Policy</Link>.
+                </p>
                 <button
                   type="submit"
                   disabled={loading}

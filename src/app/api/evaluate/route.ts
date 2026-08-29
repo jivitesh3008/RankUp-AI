@@ -285,6 +285,79 @@ Note:
          topic: topic,
          metadata_json: { question: extractedQuestion.substring(0, 100) }
        });
+
+       // Mistake Book Integration
+       const reportedMistakes = evaluationResult.mistakes || [];
+       if (reportedMistakes.length > 0) {
+         try {
+            const prompt = `Analyze these mistakes identified in a student's answer to the question: "${extractedQuestion}".
+Mistakes: ${JSON.stringify(reportedMistakes)}
+
+Determine if each mistake represents a meaningful learning gap (e.g., conceptual misunderstanding, calculation error, formula mistake, unit mistake) or just a trivial wording/presentation issue.
+Return ONLY a JSON array in exactly this format:
+[
+  {
+    "original_mistake": "The exact string from the input array",
+    "isMeaningful": true,
+    "category": "Conceptual mistake", // or Calculation mistake, Formula mistake, Unit mistake, etc. Or null.
+    "summary": "Brief summary of what went wrong"
+  }
+]`;
+            const mbRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1 } })
+            });
+
+            if (mbRes.ok) {
+              const mbData = await mbRes.json();
+              const rawText = mbData.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (rawText) {
+                const cleanedText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+                const analysisResult = JSON.parse(cleanedText);
+                
+                for (const analysis of analysisResult) {
+                  if (analysis.isMeaningful) {
+                     const { data: existing } = await supabaseAdmin
+                       .from('mistake_book')
+                       .select('*')
+                       .eq('user_id', user.id)
+                       .eq('chapter', chapter)
+                       .eq('topic', topic)
+                       .eq('question_text', extractedQuestion)
+                       .single();
+
+                     if (existing) {
+                        await supabaseAdmin
+                          .from('mistake_book')
+                          .update({
+                            occurrence_count: existing.occurrence_count + 1,
+                            status: existing.status === 'fixed' ? 'practicing' : existing.status,
+                            updated_at: new Date().toISOString()
+                          })
+                          .eq('id', existing.id);
+                     } else {
+                        await supabaseAdmin.from('mistake_book').insert({
+                          user_id: user.id,
+                          question_text: extractedQuestion,
+                          student_answer: extractedAnswer + (extractedDiagram ? `\nDiagram: ${extractedDiagram}` : ''),
+                          correct_answer: 'See explanation or NCERT', // In answer eval we don't always have a single correct answer string
+                          chapter: chapter,
+                          topic: topic,
+                          mistake_category: analysis.category || null,
+                          mistake_summary: analysis.summary || analysis.original_mistake,
+                          source_type: 'answer_evaluation',
+                          source_id: savedEvalId,
+                          status: 'new'
+                        });
+                     }
+                  }
+                }
+              }
+            }
+         } catch (err) {
+            console.error("Failed to process mistake book entries:", err);
+         }
+       }
        
     } catch (err) {
        console.error("DB error:", err);

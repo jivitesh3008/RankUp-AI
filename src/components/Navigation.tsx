@@ -43,6 +43,7 @@ export default function Navigation() {
     { name: 'Tutor', href: '/tutor' },
     { name: 'Tests', href: '/custom-test' },
     { name: 'Check Answer', href: '/answer-evaluation' },
+    { name: 'Mistakes', href: '/mistake-book' },
     { name: 'Progress', href: '/progress' },
   ];
 
@@ -79,10 +80,10 @@ export default function Navigation() {
           <div className="flex items-center">
             {user ? (
                <div className="flex items-center gap-4 ml-4 pl-4 border-l border-stone-200 dark:border-stone-800">
-                  <div className="hidden sm:flex items-center gap-2 text-sm font-medium text-stone-700 dark:text-stone-300">
-                     <UserCircle className="h-5 w-5 text-stone-400" />
+                  <Link href="/settings" className="hidden sm:flex items-center gap-2 text-sm font-medium text-stone-700 dark:text-stone-300 hover:text-teal-600 dark:hover:text-teal-400 transition-colors p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800" title="Account Settings">
+                     <UserCircle className="h-5 w-5" />
                      <span className="max-w-[120px] truncate">{user.user_metadata?.full_name || 'Student'}</span>
-                  </div>
+                  </Link>
                   <button 
                     onClick={handleLogout}
                     className="text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100 p-2 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"

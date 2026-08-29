@@ -73,9 +73,102 @@ export async function POST(req: Request) {
       evaluatedQuestions.push({
         ...q,
         isCorrect,
+        studentAnswer: uAns,
         correctAnswer: correctAns,
         explanation
       });
+    }
+
+    // Mistake Book Integration
+    const wrongAnswersToAnalyze = evaluatedQuestions.filter(eq => !eq.isCorrect && eq.studentAnswer && eq.studentAnswer.trim() !== '');
+    
+    if (wrongAnswersToAnalyze.length > 0 && user) {
+      try {
+        const apiKey = process.env.GEMINI_API_KEY;
+        const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+        
+        if (apiKey) {
+          const prompt = `Analyze these incorrect answers from a Class 10 Science test. 
+Determine if each wrong answer represents a meaningful learning gap (e.g. conceptual misunderstanding, calculation error, formula mistake, unit mistake) or just a trivial typo.
+
+Respond ONLY with a JSON array in exactly this format (no markdown, no backticks):
+[
+  {
+    "id": "question_id_here",
+    "isMeaningful": true,
+    "category": "Conceptual mistake", // Use standard categories: Conceptual mistake, Calculation mistake, Formula mistake, Unit mistake, Reasoning mistake, etc. Or null.
+    "summary": "Brief summary of what went wrong"
+  }
+]
+
+Input data:
+${JSON.stringify(wrongAnswersToAnalyze.map(q => ({ id: q.id, question: q.question, studentAnswer: q.studentAnswer, correctAnswer: q.correctAnswer })))}
+`;
+
+          const requestBody = {
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.1 }
+          };
+
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody)
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (rawText) {
+              const cleanedText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+              const analysisResult = JSON.parse(cleanedText);
+
+              // Prepare inserts
+              for (const analysis of analysisResult) {
+                if (analysis.isMeaningful) {
+                  const eq = wrongAnswersToAnalyze.find(q => q.id === analysis.id);
+                  if (eq) {
+                     // Check if mistake already exists
+                     const { data: existing } = await serverSupabase
+                       .from('mistake_book')
+                       .select('*')
+                       .eq('user_id', user.id)
+                       .eq('chapter', eq.chapter)
+                       .eq('topic', eq.topic)
+                       .eq('question_text', eq.question)
+                       .single();
+
+                     if (existing) {
+                        await serverSupabase
+                          .from('mistake_book')
+                          .update({
+                            occurrence_count: existing.occurrence_count + 1,
+                            status: existing.status === 'fixed' ? 'practicing' : existing.status,
+                            updated_at: new Date().toISOString()
+                          })
+                          .eq('id', existing.id);
+                     } else {
+                        await serverSupabase.from('mistake_book').insert({
+                          user_id: user.id,
+                          question_text: eq.question,
+                          student_answer: eq.studentAnswer,
+                          correct_answer: eq.correctAnswer,
+                          chapter: eq.chapter,
+                          topic: eq.topic,
+                          mistake_category: analysis.category || null,
+                          mistake_summary: analysis.summary || 'Needs review',
+                          source_type: 'custom_test',
+                          source_id: eq.id || null,
+                          status: 'new'
+                        });
+                     }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to process mistakes:', err);
+      }
     }
 
     let maxMisses = 0;

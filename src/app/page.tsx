@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MessageSquare, PenTool, Camera, PlayCircle, Clock, ArrowRight, FileCheck, BrainCircuit, Activity } from "lucide-react";
+import { MessageSquare, PenTool, Camera, PlayCircle, Clock, ArrowRight, FileCheck, BrainCircuit, Activity, BookMarked, AlertCircle } from "lucide-react";
 import { createClient } from '@/utils/supabase/server';
 
 export default async function Home() {
@@ -12,6 +12,7 @@ export default async function Home() {
   let recentActivity: any[] = [];
   let testStats = { completed: 0, accuracy: 0 };
   let evalStats = { completed: 0 };
+  let mistakeStats = { needsReview: 0, repeated: 0, weakestTopic: 'None' };
 
   if (user) {
     const { data: activity } = await supabase
@@ -41,6 +42,25 @@ export default async function Home() {
       .eq('user_id', user.id);
       
     evalStats.completed = evalCount || 0;
+
+    const { data: mistakesData } = await supabase
+      .from('mistake_book')
+      .select('status, topic, occurrence_count')
+      .eq('user_id', user.id);
+      
+    if (mistakesData) {
+       mistakeStats.needsReview = mistakesData.filter((m: any) => m.status === 'new' || m.status === 'reviewed' || m.status === 'practicing').length;
+       const repeated = mistakesData.filter((m: any) => m.occurrence_count > 1);
+       mistakeStats.repeated = repeated.length;
+       
+       if (repeated.length > 0) {
+         const topicCounts = repeated.reduce((acc: any, m: any) => {
+           acc[m.topic] = (acc[m.topic] || 0) + m.occurrence_count;
+           return acc;
+         }, {});
+         mistakeStats.weakestTopic = Object.keys(topicCounts).sort((a, b) => topicCounts[b] - topicCounts[a])[0] || 'None';
+       }
+    }
   }
 
   const getGreeting = () => {
@@ -195,6 +215,42 @@ export default async function Home() {
                 </div>
               </div>
             </div>
+
+            {/* Section 4 — Mistake Book */}
+            {user && (
+            <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2 font-outfit">
+                  <BookMarked className="w-5 h-5 text-amber-500" />
+                  My Mistakes
+                </h2>
+                <Link href="/mistake-book" className="text-sm font-medium text-teal-600 dark:text-teal-400 hover:text-teal-700 flex items-center gap-1">
+                  View <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="flex justify-between items-center p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 rounded-xl">
+                   <div>
+                     <div className="text-amber-700 dark:text-amber-400 font-bold text-3xl font-outfit leading-none mb-1">{mistakeStats.needsReview}</div>
+                     <div className="text-[10px] font-bold text-amber-600 dark:text-amber-500 uppercase tracking-wider">To Review</div>
+                   </div>
+                   <AlertCircle className="w-8 h-8 text-amber-200 dark:text-amber-900/50" />
+                </div>
+                
+                {mistakeStats.repeated > 0 && (
+                   <div className="p-4 bg-stone-50 dark:bg-stone-800/50 rounded-xl border border-stone-100 dark:border-stone-800">
+                     <div className="text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1">Most Repeated Topic</div>
+                     <div className="text-sm font-semibold text-stone-900 dark:text-stone-100 truncate">{mistakeStats.weakestTopic}</div>
+                   </div>
+                )}
+                
+                <Link href="/mistake-book" className="block w-full text-center py-2.5 bg-stone-900 dark:bg-white text-white dark:text-stone-900 rounded-xl text-sm font-medium hover:bg-stone-800 dark:hover:bg-stone-200 transition-colors shadow-sm">
+                  Open Mistake Book
+                </Link>
+              </div>
+            </div>
+            )}
 
           </div>
         </div>

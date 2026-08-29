@@ -27,7 +27,11 @@ Use a Socratic teaching style.
 - Explain mistakes clearly.
 - Use Class 10-level language.
 - For simple factual questions, you may give a direct explanation, but for problem-solving, prefer guided reasoning.
-- Do not quote large portions of NCERT unnecessarily.`;
+- Do not quote large portions of NCERT unnecessarily.
+
+IMPORTANT: If the student makes a clear conceptual or calculation mistake in their reasoning or answer, add this EXACT tag at the very end of your response:
+[MISCONCEPTION: <brief summary of the mistake>]
+Only do this if it's a genuine learning gap. Do not use this tag if they are just asking a question.`;
 
 export async function POST(req: Request) {
   try {
@@ -298,22 +302,29 @@ INSTRUCTIONS:
         return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again." }, { status: 429 });
       }
       
-      const apiErrorMessage = errorData?.error?.message || JSON.stringify(errorData) || 'Unknown error';
-      const safeErrorMsg = `Gemini returned HTTP ${statusCode}: ${apiErrorMessage}`;
+      const safeErrorMsg = `RankUp AI encountered an issue processing your request. Please try again.`;
       return NextResponse.json({ error: safeErrorMsg }, { status: statusCode });
     }
 
     const data = await response.json();
-    const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    let replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!replyText) {
       return NextResponse.json({ error: 'Received empty response from AI.' }, { status: 500 });
     }
 
+    let misconception = null;
+    const misconceptionMatch = replyText.match(/\[MISCONCEPTION:\s*([\s\S]*?)\]/i);
+    if (misconceptionMatch) {
+      misconception = misconceptionMatch[1].trim();
+      replyText = replyText.replace(misconceptionMatch[0], '').trim();
+    }
+
     const finalResponseData = { 
       response: replyText,
       grounding: groundingData,
-      ...(newlyExtractedImageContext ? { imageContext: newlyExtractedImageContext } : {})
+      ...(newlyExtractedImageContext ? { imageContext: newlyExtractedImageContext } : {}),
+      ...(misconception ? { misconception } : {})
     };
     
     if (user && lastUserMessage) {

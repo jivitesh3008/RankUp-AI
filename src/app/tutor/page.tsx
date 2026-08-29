@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
-import { Send, Image as ImageIcon, Trash2, Bot, User, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react';
+import { Send, Image as ImageIcon, Trash2, Bot, User, AlertCircle, Loader2, CheckCircle2, Bookmark } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -15,6 +15,8 @@ type Message = {
   content: string;
   images?: { base64: string, mimeType: string }[];
   imageContext?: any;
+  misconception?: string;
+  mistakeSaved?: boolean;
 };
 
 const MAX_IMAGES_PER_MESSAGE = 10;
@@ -173,6 +175,7 @@ export default function TutorPage() {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: data.response,
+        ...(data.misconception ? { misconception: data.misconception, mistakeSaved: false } : {})
       };
       
       setMessages((prev) => [...prev, assistantMessage]);
@@ -190,6 +193,30 @@ export default function TutorPage() {
       if (!isLoading && !isCompressing) {
         handleSend();
       }
+    }
+  };
+
+  const handleSaveMistake = async (msgId: string, misconception: string) => {
+    try {
+      const response = await fetch('/api/mistake-book', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question_text: "Tutor interaction on " + subject,
+          student_answer: "See misconception",
+          correct_answer: "See Tutor explanation",
+          chapter: subject,
+          topic: "Tutor Chat",
+          mistake_summary: misconception,
+          source_type: 'tutor',
+          source_id: msgId
+        })
+      });
+      if (response.ok) {
+        setMessages(prev => prev.map(m => m.id === msgId ? { ...m, mistakeSaved: true } : m));
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -282,13 +309,31 @@ export default function TutorPage() {
                    </div>
                 )}
                 {msg.role === 'assistant' ? (
-                  <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_.math-display]:overflow-x-auto [&_.math-display]:overflow-y-hidden [&_.math-display]:py-2 [&_.math-display]:scrollbar-thin [&_.math-display]:scrollbar-thumb-stone-300 dark:[&_.math-display]:scrollbar-thumb-stone-600">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkMath]}
-                      rehypePlugins={[rehypeKatex]}
-                    >
-                      {msg.content}
-                    </ReactMarkdown>
+                  <div className="flex flex-col gap-2">
+                    <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_.math-display]:overflow-x-auto [&_.math-display]:overflow-y-hidden [&_.math-display]:py-2 [&_.math-display]:scrollbar-thin [&_.math-display]:scrollbar-thumb-stone-300 dark:[&_.math-display]:scrollbar-thumb-stone-600">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkMath]}
+                        rehypePlugins={[rehypeKatex]}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                    {msg.misconception && (
+                      <div className="mt-1 pt-2 border-t border-stone-200 dark:border-stone-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <span className="text-xs text-amber-600 dark:text-amber-500 font-medium flex items-center gap-1.5">
+                          <AlertCircle className="w-3.5 h-3.5" />
+                          Misconception identified
+                        </span>
+                        <button
+                          onClick={() => handleSaveMistake(msg.id, msg.misconception!)}
+                          disabled={msg.mistakeSaved}
+                          className={`text-xs font-medium px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${msg.mistakeSaved ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800 shadow-sm'}`}
+                        >
+                          {msg.mistakeSaved ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
+                          {msg.mistakeSaved ? 'Saved to Mistake Book' : 'Save to Mistake Book'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="whitespace-pre-wrap">{msg.content}</div>

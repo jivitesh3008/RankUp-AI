@@ -1,6 +1,6 @@
 import { createClient } from '@/utils/supabase/server';
 import AuthPrompt from '@/components/AuthPrompt';
-import { Activity, BookOpen, BrainCircuit, CheckCircle2, Clock, FileCheck, Target, TrendingUp } from 'lucide-react';
+import { Activity, BookOpen, BrainCircuit, CheckCircle2, Clock, FileCheck, Target, TrendingUp, BookMarked } from 'lucide-react';
 import Link from 'next/link';
 
 export default async function ProgressPage() {
@@ -36,6 +36,36 @@ export default async function ProgressPage() {
   const correctQuestions = attempts?.reduce((acc, curr) => acc + curr.correct_answers, 0) || 0;
   const overallAccuracy = questionsPracticed > 0 ? Math.round((correctQuestions / questionsPracticed) * 100) : 0;
   const evaluationsCompleted = evaluations?.length || 0;
+
+  const { data: mistakesData } = await supabase
+    .from('mistake_book')
+    .select('status, mistake_category, topic, occurrence_count')
+    .eq('user_id', user.id);
+
+  let mistakesRecorded = 0;
+  let mistakesFixed = 0;
+  let mostCommonCategory = 'None';
+  let weakestTopic = 'None';
+  
+  if (mistakesData) {
+     mistakesRecorded = mistakesData.length;
+     mistakesFixed = mistakesData.filter((m: any) => m.status === 'fixed').length;
+     
+     const categoryCounts = mistakesData.reduce((acc: any, m: any) => {
+       if (m.mistake_category) acc[m.mistake_category] = (acc[m.mistake_category] || 0) + m.occurrence_count;
+       return acc;
+     }, {});
+     mostCommonCategory = Object.keys(categoryCounts).sort((a, b) => categoryCounts[b] - categoryCounts[a])[0] || 'None';
+
+     const repeated = mistakesData.filter((m: any) => m.occurrence_count > 1);
+     if (repeated.length > 0) {
+       const topicCounts = repeated.reduce((acc: any, m: any) => {
+         acc[m.topic] = (acc[m.topic] || 0) + m.occurrence_count;
+         return acc;
+       }, {});
+       weakestTopic = Object.keys(topicCounts).sort((a, b) => topicCounts[b] - topicCounts[a])[0] || 'None';
+     }
+  }
 
   // Chapter Performance (mocked aggregation for now, could be done via RPC)
   const chapterStats: Record<string, { total: number, correct: number }> = {};
@@ -105,6 +135,35 @@ export default async function ProgressPage() {
               </div>
               <div className="text-4xl font-bold font-outfit text-stone-900 dark:text-stone-100">{evaluationsCompleted}</div>
             </div>
+          </div>
+
+          <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl p-6 shadow-sm">
+             <div className="flex items-center justify-between mb-6">
+               <h2 className="text-xl font-bold font-outfit text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                 <BookMarked className="w-5 h-5 text-amber-500" />
+                 Mistake Book Stats
+               </h2>
+               <Link href="/mistake-book" className="text-sm font-medium text-amber-600 dark:text-amber-500 hover:text-amber-700">View Mistakes →</Link>
+             </div>
+             
+             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+               <div>
+                 <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Mistakes Recorded</div>
+                 <div className="text-3xl font-bold font-outfit text-stone-900 dark:text-stone-100">{mistakesRecorded}</div>
+               </div>
+               <div>
+                 <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Mistakes Fixed</div>
+                 <div className="text-3xl font-bold font-outfit text-emerald-600 dark:text-emerald-400">{mistakesFixed}</div>
+               </div>
+               <div>
+                 <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Most Common</div>
+                 <div className="text-sm font-semibold text-stone-900 dark:text-stone-100 mt-2 truncate">{mostCommonCategory}</div>
+               </div>
+               <div>
+                 <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Weakest Topic</div>
+                 <div className="text-sm font-semibold text-stone-900 dark:text-stone-100 mt-2 truncate">{weakestTopic}</div>
+               </div>
+             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
