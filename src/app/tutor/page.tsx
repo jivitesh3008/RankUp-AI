@@ -151,6 +151,7 @@ export default function TutorPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          subject,
           messages: [...messages, userMessage].map(m => ({ 
             role: m.role, 
             content: m.content,

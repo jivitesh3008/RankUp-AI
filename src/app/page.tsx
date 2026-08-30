@@ -146,7 +146,7 @@ export default async function Home() {
                         <div className="w-2 h-2 rounded-full bg-teal-400"></div>
                         <div>
                           <p className="font-medium text-stone-900 dark:text-stone-100">
-                            {act.chapter || 'Science Practice'}
+                            {act.chapter || 'Subject Practice'}
                           </p>
                           <p className="text-sm text-stone-500 mt-0.5">
                             {act.event_type === 'answer_evaluation' ? 'Answer Evaluation' : 

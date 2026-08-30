@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient as createServerClientLocal } from '@/utils/supabase/server';
+import { SCIENCE_CHAPTERS, MATHS_CHAPTERS } from '@/lib/constants';
 
 export async function GET(req: Request) {
   try {
@@ -11,6 +12,7 @@ export async function GET(req: Request) {
     }
 
     const { searchParams } = new URL(req.url);
+    const subject = searchParams.get('subject');
     const chapter = searchParams.get('chapter');
     const topic = searchParams.get('topic');
     const status = searchParams.get('status');
@@ -19,6 +21,11 @@ export async function GET(req: Request) {
     const sort = searchParams.get('sort') || 'needs_review'; // 'recent', 'repeated', 'needs_review', 'recently_fixed'
 
     let query = supabase.from('mistake_book').select('*').eq('user_id', user.id);
+
+    if (subject && subject !== 'All') {
+      const allowedChapters = subject === 'Science' ? SCIENCE_CHAPTERS : MATHS_CHAPTERS;
+      query = query.in('chapter', allowedChapters);
+    }
 
     if (chapter && chapter !== 'All') query = query.eq('chapter', chapter);
     if (topic && topic !== 'All') query = query.eq('topic', topic);

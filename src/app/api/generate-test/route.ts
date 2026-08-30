@@ -3,21 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { encryptAnswer } from '@/lib/evaluate';
 import staticTestEmbedding from '@/lib/static-test-embedding.json';
 
-const ALL_CHAPTERS = [
-  'Chemical Reactions and Equations',
-  'Acids, Bases and Salts',
-  'Metals and Non-metals',
-  'Carbon and its Compounds',
-  'Life Processes',
-  'Control and Coordination',
-  'How do Organisms Reproduce?',
-  'Heredity',
-  'Light - Reflection and Refraction',
-  'The Human Eye and the Colourful World',
-  'Electricity',
-  'Magnetic Effects of Electric Current',
-  'Our Environment'
-];
+import { SCIENCE_CHAPTERS, MATHS_CHAPTERS } from '@/lib/constants';
 
 export async function POST(req: Request) {
   try {
@@ -29,11 +15,12 @@ export async function POST(req: Request) {
 
     const { subject, chapters, count, difficulty, questionType } = JSON.parse(bodyText);
 
-    if (subject !== 'Science') {
-      return NextResponse.json({ error: 'Only Science is currently supported.' }, { status: 400 });
+    if (subject !== 'Science' && subject !== 'Mathematics') {
+      return NextResponse.json({ error: 'Only Science and Mathematics are currently supported.' }, { status: 400 });
     }
 
-    const targetChapters = chapters.includes('All Science') ? ALL_CHAPTERS : chapters;
+    const allChaptersList = subject === 'Mathematics' ? MATHS_CHAPTERS : SCIENCE_CHAPTERS;
+    const targetChapters = chapters.includes(`All ${subject}`) ? allChaptersList : chapters;
 
     if (!targetChapters || targetChapters.length === 0) {
        return NextResponse.json({ error: 'At least one chapter must be selected.' }, { status: 400 });
@@ -78,7 +65,7 @@ export async function POST(req: Request) {
         match_threshold: matchThreshold,
         match_count: topKPerChapter,
         p_class: '10',
-        p_subject: 'Science',
+        p_subject: subject,
         p_chapter: ch
       }).then((res: any) => ({ ...res, chapter: ch }))
     ));
@@ -95,7 +82,7 @@ export async function POST(req: Request) {
 
     const ncertContext = allChunks.map((c: any) => `[Chapter: ${c.chapter} | Topic: ${c.topic}]\n${c.content}`).join('\n\n---\n\n');
 
-    const systemPrompt = `You are an expert Class 10 CBSE Science examiner. Your task is to generate a custom test.
+const systemPrompt = `You are an expert Class 10 CBSE ${subject} examiner. Your task is to generate a custom test.
     
 AUTHORITATIVE NCERT CONTEXT:
 ${ncertContext}
@@ -108,6 +95,9 @@ INSTRUCTIONS:
 5. For MCQs: Ensure exactly ONE correct answer. Provide plausible distractors.
 6. For Numericals: Provide all necessary values from the context and ensure the answer is solvable.
    CRITICAL RULE: Any question that requires a calculated mathematical number or physical unit as the answer MUST be labeled with "type": "Numerical". Do NOT label calculations as "Short Answer".
+7. For Assertion-Reason: Assertion (A) and Reason (R) must be meaningful. Provide standard 4 options.
+8. Output the test in STRICT JSON format matching the schema below.
+${subject === 'Mathematics' ? '\nSPECIAL MATHS RULE: You must use valid LaTeX formatting for all mathematical equations, symbols, and expressions inside the questions, options, and explanations. For example: \\(x^2 + y^2 = r^2\\) or $$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$. Do not use raw text like x^2.' : ''}
 7. For Assertion-Reason: Assertion (A) and Reason (R) must be meaningful. Provide standard 4 options.
 8. Output the test in STRICT JSON format matching the schema below.
 

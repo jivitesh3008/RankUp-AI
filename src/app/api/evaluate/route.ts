@@ -56,6 +56,7 @@ export async function POST(req: Request) {
     let extractedQuestion = questionText?.trim() || '';
     let extractedAnswer = '';
     let extractedDiagram = '';
+    let extractedSubject = 'Science'; // Default to Science
 
     // STAGE 1: Image Understanding
     if (image) {
@@ -72,7 +73,8 @@ export async function POST(req: Request) {
 {
   "questionText": "Any explicit question asked or printed in the image. Leave blank if none.",
   "studentWork": "Transcribe any handwritten steps, reasoning, calculations, or final answers.",
-  "diagramDescription": "Describe any diagrams, labels, or relationships present."
+  "diagramDescription": "Describe any diagrams, labels, or relationships present.",
+  "likelySubject": "Science" | "Mathematics"
 }`
         };
 
@@ -98,6 +100,9 @@ export async function POST(req: Request) {
             }
             extractedAnswer = parsed.studentWork || '';
             extractedDiagram = parsed.diagramDescription || '';
+            if (parsed.likelySubject && ['Science', 'Mathematics'].includes(parsed.likelySubject)) {
+               extractedSubject = parsed.likelySubject;
+            }
           }
         } else {
            console.error("Stage 1 Image Understanding failed:", await stg1Res.text());
@@ -129,21 +134,40 @@ export async function POST(req: Request) {
       const matchThreshold = 0.65;
       const topK = 5;
       
+      if (!image) {
+        // Simple heuristic if no image
+        const lowerQ = extractedQuestion.toLowerCase();
+        if (lowerQ.includes('chemical') || lowerQ.includes('photosynthesis')) extractedSubject = 'Science';
+        else {
+           const mathKw = ['solve', 'prove that', 'find the', 'zeroes', 'polynomial', 'arithmetic progression', 'distance between', 'probability', 'sin ', 'cos ', 'tan ', 'theorem', 'mean ', 'tangent', 'radius', 'equation', 'roots'];
+           if (mathKw.some(kw => lowerQ.includes(kw))) extractedSubject = 'Mathematics';
+        }
+      }
+      
       const result = await supabaseAdmin.rpc('match_knowledge_chunks_global', {
-        query_embedding: queryEmbedding,
-        match_threshold: matchThreshold,
-        match_count: topK,
-        p_class: '10',
-        p_subject: 'Science'
+        query_embedding: queryEmbedding, match_threshold: matchThreshold, match_count: topK, p_class: '10', p_subject: extractedSubject
       });
       
       if (result.error) {
         console.error('Global vector search error:', result.error);
       } else if (result.data && result.data.length > 0) {
-        const chunks = result.data;
-        ncertContext = chunks.map((c: any) => c.content).join('\n\n---\n\n');
-        chapter = chunks[0].chapter || chapter;
-        topic = chunks[0].topic || topic;
+        let chunks = result.data;
+        
+        // Borderline OOD Guard (Task 1)
+        const topScore = chunks[0].similarity;
+        if (topScore >= 0.65 && topScore < 0.68) {
+           const oodKeywords = ['quantum', 'differential equation', 'integration by', 'calculus', 'advanced mechanics', 'integral', 'derivative', 'relativity', 'thermodynamics'];
+           const qLower = extractedQuestion.toLowerCase();
+           if (oodKeywords.some(kw => qLower.includes(kw))) {
+             chunks = []; // Reject
+           }
+        }
+        
+        if (chunks.length > 0) {
+          ncertContext = chunks.map((c: any) => c.content).join('\n\n---\n\n');
+          chapter = chunks[0].chapter || chapter;
+          topic = chunks[0].topic || topic;
+        }
       }
     } catch (err) {
       console.error('Failed to generate embedding or query supabase:', err);
@@ -151,7 +175,7 @@ export async function POST(req: Request) {
 
     // STAGE 3: Final Evaluation
     console.log("Evaluation Stage 3: Generating evaluation");
-    const evaluationPrompt = `You are an AI assistant evaluating a Class 10 Science handwritten answer.
+    const evaluationPrompt = `You are an AI assistant evaluating a Class 10 CBSE handwritten answer.
     
 QUESTION:
 ${extractedQuestion}

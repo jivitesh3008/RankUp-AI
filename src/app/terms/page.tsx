@@ -10,7 +10,7 @@ export default function TermsPage() {
       
       <div className="mb-10">
         <h1 className="text-4xl font-bold font-outfit text-stone-900 dark:text-stone-100 tracking-tight">Terms of Service</h1>
-        <p className="text-sm text-stone-500 dark:text-stone-400 mt-2">Last Updated: August 29, 2026</p>
+        <p className="text-sm text-stone-500 dark:text-stone-400 mt-2">Last Updated: August 30, 2026</p>
       </div>
       
       <div className="prose prose-stone dark:prose-invert max-w-none prose-headings:font-outfit prose-headings:font-bold prose-h2:text-2xl prose-h2:mt-10 prose-h2:mb-4 prose-p:text-stone-600 dark:prose-p:text-stone-300 prose-p:leading-relaxed">
@@ -20,18 +20,18 @@ export default function TermsPage() {
 
         <h2>1. Educational Purpose Only</h2>
         <p>
-          RankUp AI is an educational tool designed to help Class 10 students learn and practice Science concepts. It is meant to supplement, not replace, formal schooling and instruction. 
+          RankUp AI is an educational platform designed initially for Class 10 students learning Science and Mathematics. It is meant to supplement, not replace, formal schooling and instruction. 
         </p>
 
         <h2>2. AI Limitations and Disclaimers</h2>
         <p>
-          RankUp AI uses artificial intelligence (Google Gemini) to evaluate handwritten answers, act as a tutor, and generate tests. While we strive for accuracy:
+          RankUp AI uses artificial intelligence to evaluate handwritten answers, act as a tutor, and generate tests. While we strive for accuracy:
         </p>
         <ul>
-          <li><strong>AI-Assisted Evaluation:</strong> All scores and feedback provided by the Answer Evaluator are "AI-estimated" and do NOT constitute official CBSE marking.</li>
-          <li><strong>Potential Inaccuracies:</strong> AI can occasionally make mistakes. Students should use appropriate judgment, verify important facts against their NCERT textbooks, and consult teachers when in doubt.</li>
+          <li><strong>AI-Assisted Evaluation:</strong> Answer evaluations are AI-assisted estimates intended to provide educational feedback. They are not official CBSE marks and may differ from marks awarded by a teacher or examination board.</li>
+          <li><strong>Potential Inaccuracies:</strong> AI can make mistakes. Image interpretation can fail, handwritten work may be unreadable, generated test questions may occasionally require verification, and YouTube tests depend on accessible transcript/content.</li>
+          <li>Students should verify important information with trusted educational sources and teachers.</li>
         </ul>
-        <p>We do not guarantee the absolute accuracy, completeness, or reliability of AI-generated content.</p>
 
         <h2>3. User Responsibilities and Prohibited Misuse</h2>
         <p>You agree to use RankUp AI responsibly. You must not:</p>
@@ -46,24 +46,30 @@ export default function TermsPage() {
           You are responsible for maintaining the confidentiality of your account credentials. You are responsible for all activities that occur under your account. If you believe your account has been compromised, you must delete your account or contact us immediately.
         </p>
 
-        <h2>5. Availability and Service Interruptions</h2>
+        <h2>5. Third-Party Services and Availability</h2>
         <p>
-          RankUp AI relies on third-party services (like Supabase and Google Gemini). We do not guarantee continuous, uninterrupted access to the platform. We may suspend or limit access temporarily for maintenance, upgrades, or due to external outages.
+          RankUp AI relies on third-party services and infrastructure (such as Supabase and Google Gemini) to function. Service availability and AI behavior may depend on those services. We do not guarantee continuous, uninterrupted access to the platform. We may suspend or limit access temporarily for maintenance, upgrades, or due to external outages.
         </p>
 
-        <h2>6. Account Termination</h2>
+        <h2>6. Intellectual Property and Content</h2>
+        <p>
+          RankUp AI's branding, software, and original educational designs are the property of RankUp. You retain ownership of your user-submitted content. Any generated outputs provided by RankUp AI are for your personal educational use. You agree not to distribute or use generated outputs in a way that infringes upon third-party rights. 
+          <em>(Note: Content ownership rules are subject to ongoing legal review to ensure compliance with third-party AI provider terms.)</em>
+        </p>
+
+        <h2>7. Account Termination</h2>
         <p>
           We reserve the right to suspend or terminate your account if you violate these Terms, abuse the AI limits, or otherwise disrupt the platform. You may terminate these terms at any time by deleting your account via the Settings page.
         </p>
 
-        <h2>7. Changes to the Service</h2>
+        <h2>8. Changes to the Service</h2>
         <p>
           We may update, modify, or discontinue RankUp AI or any of its features at any time without prior notice.
         </p>
 
-        <h2>8. Contact Information</h2>
+        <h2>9. Contact Information</h2>
         <p>
-          For any questions about these Terms, please visit our <Link href="/contact" className="text-teal-600 hover:underline">Contact page</Link>.
+          For any questions about these Terms, please contact our Legal Team at <strong>legal@rankup.ai</strong> (Placeholder: Requires update before launch).
         </p>
       </div>
     </div>

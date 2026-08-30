@@ -4,6 +4,7 @@ import { createClient } from '@/utils/supabase/client';
 import AuthPrompt from '@/components/AuthPrompt';
 import { Loader2, Search, BookOpen, RotateCcw, AlertCircle, BookMarked, CheckCircle2 } from 'lucide-react';
 import PracticeModal from '@/components/PracticeModal';
+import { SCIENCE_CHAPTERS, MATHS_CHAPTERS } from '@/lib/constants';
 
 type Mistake = {
   id: string;
@@ -27,6 +28,7 @@ export default function MistakeBookPage() {
   const [loading, setLoading] = useState(true);
   
   const [search, setSearch] = useState('');
+  const [subjectFilter, setSubjectFilter] = useState('All');
   const [chapterFilter, setChapterFilter] = useState('All');
   const [topicFilter, setTopicFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -56,6 +58,7 @@ export default function MistakeBookPage() {
     try {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
+      if (subjectFilter !== 'All') params.append('subject', subjectFilter);
       if (chapterFilter !== 'All') params.append('chapter', chapterFilter);
       if (topicFilter !== 'All') params.append('topic', topicFilter);
       if (statusFilter !== 'All') params.append('status', statusFilter);
@@ -132,13 +135,15 @@ export default function MistakeBookPage() {
           />
         </div>
         <div className="flex flex-wrap gap-3 w-full md:w-auto">
+          <select value={subjectFilter} onChange={e => { setSubjectFilter(e.target.value); setChapterFilter('All'); }} className="bg-stone-50 dark:bg-stone-800/50 border border-stone-200 dark:border-stone-700 rounded-xl px-4 py-2.5 text-sm outline-none font-medium text-stone-700 dark:text-stone-300">
+            <option value="All">All Subjects</option>
+            <option value="Science">Science</option>
+            <option value="Mathematics">Mathematics</option>
+          </select>
           <select value={chapterFilter} onChange={e => setChapterFilter(e.target.value)} className="bg-stone-50 dark:bg-stone-800/50 border border-stone-200 dark:border-stone-700 rounded-xl px-4 py-2.5 text-sm outline-none font-medium text-stone-700 dark:text-stone-300">
             <option value="All">All Chapters</option>
-            <option value="Electricity">Electricity</option>
-            <option value="Magnetic Effects of Electric Current">Magnetic Effects</option>
-            <option value="Light Reflection and Refraction">Light</option>
-            <option value="Human Eye and Colourful World">Human Eye</option>
-            <option value="Chemical Reactions and Equations">Chemical Reactions</option>
+            {subjectFilter !== 'Mathematics' && SCIENCE_CHAPTERS.map(ch => <option key={ch} value={ch}>{ch}</option>)}
+            {subjectFilter !== 'Science' && MATHS_CHAPTERS.map(ch => <option key={ch} value={ch}>{ch}</option>)}
           </select>
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="bg-stone-50 dark:bg-stone-800/50 border border-stone-200 dark:border-stone-700 rounded-xl px-4 py-2.5 text-sm outline-none font-medium text-stone-700 dark:text-stone-300">
             <option value="All">All Statuses</option>

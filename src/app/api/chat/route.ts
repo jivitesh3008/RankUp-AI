@@ -27,6 +27,7 @@ Use a Socratic teaching style.
 - Explain mistakes clearly.
 - Use Class 10-level language.
 - For simple factual questions, you may give a direct explanation, but for problem-solving, prefer guided reasoning.
+- For Mathematics, encourage reasoning (e.g. "What would you subtract from both sides first to isolate 2x?") rather than immediately giving the final answer.
 - Do not quote large portions of NCERT unnecessarily.
 
 IMPORTANT: If the student makes a clear conceptual or calculation mistake in their reasoning or answer, add this EXACT tag at the very end of your response:
@@ -46,7 +47,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Payload too large. Max allowed size is 5MB.' }, { status: 413 });
     }
 
-    const { messages } = JSON.parse(bodyText);
+    const { messages, subject } = JSON.parse(bodyText);
 
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: 'Invalid messages format' }, { status: 400 });
@@ -171,31 +172,69 @@ export async function POST(req: Request) {
         const matchThreshold = 0.65;
         const topK = 5;
         
-        let allChunks: any[] = [];
-        
-        const result = await supabase.rpc('match_knowledge_chunks_global', {
-          query_embedding: queryEmbedding,
-          match_threshold: matchThreshold,
-          match_count: topK,
-          p_class: '10',
-          p_subject: 'Science'
-        });
-        
-        if (result.error) {
-          console.error('Global vector search error:', result.error);
-        } else if (result.data) {
-          allChunks = result.data;
+        let explicitSubject = subject || lastUserMessage.subject || (lastUserMessage.imageContext?.likelySubject);
+        if (explicitSubject && !['Science', 'Mathematics'].includes(explicitSubject)) {
+           explicitSubject = null;
         }
         
-        const chunks = allChunks; // already sorted and limited to topK by the global RPC
+        let allChunks: any[] = [];
+        let chosenSubject = 'Science';
+        
+        if (explicitSubject) {
+           chosenSubject = explicitSubject;
+           const result = await supabase.rpc('match_knowledge_chunks_global', {
+             query_embedding: queryEmbedding,
+             match_threshold: matchThreshold,
+             match_count: topK,
+             p_class: '10',
+             p_subject: chosenSubject
+           });
+           if (!result.error && result.data) allChunks = result.data;
+        } else {
+           // Safe dual-routing
+           const [scienceRes, mathRes] = await Promise.all([
+             supabase.rpc('match_knowledge_chunks_global', {
+               query_embedding: queryEmbedding, match_threshold: matchThreshold, match_count: topK, p_class: '10', p_subject: 'Science'
+             }),
+             supabase.rpc('match_knowledge_chunks_global', {
+               query_embedding: queryEmbedding, match_threshold: matchThreshold, match_count: topK, p_class: '10', p_subject: 'Mathematics'
+             })
+           ]);
+           
+           const scienceTop = scienceRes.data?.[0]?.similarity || 0;
+           const mathTop = mathRes.data?.[0]?.similarity || 0;
+           
+           if (mathTop > scienceTop && mathTop > matchThreshold) {
+              chosenSubject = 'Mathematics';
+              allChunks = mathRes.data || [];
+           } else {
+              chosenSubject = 'Science';
+              allChunks = scienceRes.data || [];
+           }
+        }
+        
+        let chunks = allChunks; // already sorted and limited to topK by the global RPC
 
-        console.log('CHUNKS RETRIEVED (top):', chunks.length);
+        // Borderline OOD Guard (Task 1)
+        if (chunks && chunks.length > 0) {
+          const topScore = chunks[0].similarity;
+          if (topScore >= 0.65 && topScore < 0.68) {
+             const oodKeywords = ['quantum', 'differential equation', 'integration by', 'calculus', 'advanced mechanics', 'integral', 'derivative', 'relativity', 'thermodynamics'];
+             const qLower = userQuery.toLowerCase();
+             if (oodKeywords.some(kw => qLower.includes(kw))) {
+               console.log("Borderline OOD Guard triggered. Rejecting:", userQuery);
+               chunks = []; // Reject obvious OOD
+             }
+          }
+        }
+
+        console.log(`CHUNKS RETRIEVED (top) for ${chosenSubject}:`, chunks.length);
 
         if (chunks && chunks.length > 0) {
           ncertContext = chunks.map((c: any) => c.content).join('\n\n---\n\n');
           groundingData = {
             used: true,
-            source: 'NCERT Class 10 Science',
+            source: `NCERT Class 10 ${chosenSubject}`,
             chapter: chunks[0].chapter,
             chunks: chunks.length,
             scores: chunks.map((c: any) => c.similarity),

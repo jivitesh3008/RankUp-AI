@@ -6,21 +6,7 @@ import { createClient } from '@/utils/supabase/client';
 import AuthPrompt from '@/components/AuthPrompt';
 import { useEffect } from 'react';
 
-const ALL_CHAPTERS = [
-  'Chemical Reactions and Equations',
-  'Acids, Bases and Salts',
-  'Metals and Non-metals',
-  'Carbon and its Compounds',
-  'Life Processes',
-  'Control and Coordination',
-  'How do Organisms Reproduce?',
-  'Heredity',
-  'Light - Reflection and Refraction',
-  'The Human Eye and the Colourful World',
-  'Electricity',
-  'Magnetic Effects of Electric Current',
-  'Our Environment'
-];
+import { SCIENCE_CHAPTERS, MATHS_CHAPTERS } from '@/lib/constants';
 
 type Question = {
   id: string;
@@ -44,6 +30,7 @@ export default function CustomTestPage() {
   const [user, setUser] = useState<any>('loading');
   const [view, setView] = useState<TestState>('SETUP');
   
+  const [subject, setSubject] = useState<'Science' | 'Mathematics'>('Science');
   const [selectedChapters, setSelectedChapters] = useState<string[]>([]);
   const [questionCount, setQuestionCount] = useState<number>(5);
   const [difficulty, setDifficulty] = useState<string>('Medium');
@@ -90,7 +77,7 @@ export default function CustomTestPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          subject: 'Science',
+          subject,
           chapters: selectedChapters,
           count: questionCount,
           difficulty,
@@ -160,6 +147,7 @@ export default function CustomTestPage() {
   };
 
   const currentQ = questions[currentQuestionIdx];
+  const AVAILABLE_CHAPTERS = subject === 'Science' ? SCIENCE_CHAPTERS : MATHS_CHAPTERS;
 
   if (user === 'loading') {
      return <div className="flex h-[calc(100vh-4rem)] items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-teal-600" /></div>;
@@ -210,10 +198,27 @@ export default function CustomTestPage() {
               )}
 
               <div>
-                <h3 className="text-lg font-semibold font-outfit text-stone-900 dark:text-stone-100 mb-3">1. Select Chapters</h3>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-4">
+                  <h3 className="text-lg font-semibold font-outfit text-stone-900 dark:text-stone-100">1. Select Subject & Chapters</h3>
+                  
+                  <div className="flex bg-stone-100 dark:bg-stone-800 p-1 rounded-xl w-full sm:w-auto self-start">
+                    <button 
+                      onClick={() => { setSubject('Science'); setSelectedChapters([]); }}
+                      className={`flex-1 sm:px-6 py-2 rounded-lg text-sm font-semibold transition-all ${subject === 'Science' ? 'bg-white dark:bg-stone-700 text-teal-600 dark:text-teal-400 shadow-sm' : 'text-stone-500 hover:text-stone-700 dark:hover:text-stone-300'}`}
+                    >
+                      Science
+                    </button>
+                    <button 
+                      onClick={() => { setSubject('Mathematics'); setSelectedChapters([]); }}
+                      className={`flex-1 sm:px-6 py-2 rounded-lg text-sm font-semibold transition-all ${subject === 'Mathematics' ? 'bg-white dark:bg-stone-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-stone-500 hover:text-stone-700 dark:hover:text-stone-300'}`}
+                    >
+                      Mathematics
+                    </button>
+                  </div>
+                </div>
                 <div className="flex items-center gap-3 mb-4">
                   <button 
-                    onClick={() => setSelectedChapters(ALL_CHAPTERS)}
+                    onClick={() => setSelectedChapters(AVAILABLE_CHAPTERS)}
                     className="text-sm px-4 py-2 font-medium bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 dark:bg-teal-900/30 dark:border-teal-800 dark:text-teal-300 rounded-lg transition-colors"
                   >Select All</button>
                   <button 
@@ -222,10 +227,12 @@ export default function CustomTestPage() {
                   >Clear</button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {ALL_CHAPTERS.map(ch => {
+                  {AVAILABLE_CHAPTERS.map(ch => {
                     const isSelected = selectedChapters.includes(ch);
                     const btnClass = isSelected 
-                      ? "text-left px-4 py-3 rounded-xl border transition-all border-teal-600 bg-teal-50 dark:bg-teal-900/20 text-teal-800 dark:text-teal-300 shadow-sm"
+                      ? (subject === 'Science' 
+                          ? "text-left px-4 py-3 rounded-xl border transition-all border-teal-600 bg-teal-50 dark:bg-teal-900/20 text-teal-800 dark:text-teal-300 shadow-sm"
+                          : "text-left px-4 py-3 rounded-xl border transition-all border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 shadow-sm")
                       : "text-left px-4 py-3 rounded-xl border transition-all border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 text-stone-600 dark:text-stone-400 hover:border-stone-300 dark:hover:border-stone-700";
                     
                     return (
