@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { generateQueryEmbedding } from '@/lib/embeddings';
 import { createClient as createServerClientLocal } from '@/utils/supabase/server';
+import { handleGeminiError } from '@/lib/gemini-error-handler';
 
 export async function POST(req: Request) {
   try {
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
       if (rateLimitError) {
         console.error('Rate limit RPC error:', rateLimitError);
       } else if (isAllowed === false) {
-        return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again." }, { status: 429 });
+        return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again.", errorType: 'RATE_LIMIT_TEMPORARY' }, { status: 429 });
       }
     } catch (err) {
       console.error('Rate limit check failed:', err);
@@ -105,11 +106,11 @@ export async function POST(req: Request) {
             }
           }
         } else {
-           console.error("Stage 1 Image Understanding failed:", await stg1Res.text());
-           if (stg1Res.status === 429 || stg1Res.status === 503) {
-             return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again." }, { status: 429 });
-           }
-           return NextResponse.json({ error: 'Failed to process image.' }, { status: 500 });
+           const errorText = await stg1Res.text();
+           console.error("Stage 1 Image Understanding failed:", errorText);
+           let parsedErr;
+           try { parsedErr = JSON.parse(errorText); } catch(e) {}
+           return handleGeminiError(stg1Res, parsedErr || { error: { message: errorText } });
         }
       } catch (err) {
         console.error("Stage 1 execution error:", err);
@@ -193,6 +194,7 @@ INSTRUCTIONS:
 Evaluate the student's answer based on the question and NCERT context.
 Do NOT invent an official CBSE score. Give an "AI-estimated score".
 Do NOT expose internal chain-of-thought.
+Keep your feedback concise. Do NOT over-expand the evaluation. Use short sentences.
 Return ONLY a JSON object with this exact schema (no markdown, no backticks):
 {
   "estimatedMarks": 2.5,
@@ -242,12 +244,9 @@ Note:
     }
 
     if (!response || !response.ok) {
-       console.error("Evaluation failed.");
-       const statusCode = response?.status || 500;
-       if (statusCode === 429 || statusCode === 503) {
-         return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again." }, { status: 429 });
-       }
-       return NextResponse.json({ error: 'Failed to generate evaluation.' }, { status: statusCode });
+       const errorData = response ? await response.json().catch(() => ({})) : {};
+       console.error("Evaluation failed.", errorData);
+       return handleGeminiError(response, errorData);
     }
 
     const evalData = await response.json();

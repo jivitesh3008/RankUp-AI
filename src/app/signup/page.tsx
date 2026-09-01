@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
-import { BookOpen } from 'lucide-react';
+import Image from 'next/image';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -97,7 +97,7 @@ export default function SignupPage() {
     <div className="flex min-h-[calc(100vh-4rem)] flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <BookOpen className="h-10 w-10 text-teal-600 dark:text-teal-400" />
+          <Image src="/logo.png" alt="RankUp AI Logo" width={85} height={60} className="object-contain" priority />
         </div>
         <h2 className="mt-6 text-center text-3xl font-bold font-outfit tracking-tight text-stone-900 dark:text-stone-100">
           Create your account

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { generateQueryEmbedding } from '@/lib/embeddings';
 import { createClient as createServerClientLocal } from '@/utils/supabase/server';
+import { handleGeminiError } from '@/lib/gemini-error-handler';
 
 const embeddingCache = new Map<string, { vector: number[], timestamp: number }>();
 const responseCache = new Map<string, { data: any, timestamp: number }>();
@@ -20,9 +21,20 @@ function cleanupCache(cache: Map<string, { timestamp: number }>) {
 const SYSTEM_PROMPT_BASE = `You are the RankUp AI Tutor, a Class 10 CBSE tutor.
 Your teaching philosophy is: "Don't just give the answer. Help the student understand it."
 Use a Socratic teaching style.
+
+CRITICAL LENGTH AND FORMAT RULES:
+- BE CONCISE. Default target is 80-180 words, 3-7 short paragraphs/steps.
+- Prefer: 1 short observation, 1 useful hint/question, 1 next step.
+- Do NOT output a long complete derivation/solution unless the student explicitly asks for the full solution, is clearly stuck, or the question requires a concise direct answer.
+- For simple definitions: Give 1 concise explanation, 1 simple example, and 1 optional Socratic question. Do not write essays.
+- Do NOT use conversational filler like "Great question!", "Let's dive deeper", or "Absolutely!". Get straight to the point.
+- For follow-up questions, do NOT re-explain the entire previous answer.
+- Avoid giant paragraphs. Use short paragraphs, bullets where useful, and numbered steps.
+- For image-based questions, do NOT repeat the extracted question/student work back to them; just answer it.
+- For handwritten mistakes, pinpoint the exact issue concisely (e.g., "Your substitution uses 5 instead of 0.5. Try recalculating.") instead of rewriting the whole solution.
+
 - Break difficult concepts into smaller steps.
-- Ask useful follow-up questions.
-- Encourage the student to think.
+- Ask useful follow-up questions. Encourage the student to think.
 - Give hints before revealing a complete solution when appropriate.
 - Explain mistakes clearly.
 - Use Class 10-level language.
@@ -75,7 +87,7 @@ export async function POST(req: Request) {
       if (rateLimitError) {
         console.error('Rate limit RPC error:', rateLimitError);
       } else if (isAllowed === false) {
-        return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again." }, { status: 429 });
+        return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again.", errorType: 'RATE_LIMIT_TEMPORARY' }, { status: 429 });
       }
     } catch (err) {
       console.error('Rate limit check failed:', err);
@@ -139,10 +151,13 @@ export async function POST(req: Request) {
               lastUserMessage.imageContext = newlyExtractedImageContext;
             }
           } else {
-             console.error("Stage 1 Image Understanding failed:", await stg1Res.text());
-             if (stg1Res.status === 429 || stg1Res.status === 503) {
-               return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again." }, { status: 429 });
-             }
+             const errorText = await stg1Res.text();
+             console.error("Stage 1 Image Understanding failed:", errorText);
+             
+             let parsedErr;
+             try { parsedErr = JSON.parse(errorText); } catch(e) {}
+             
+             return handleGeminiError(stg1Res, parsedErr || { error: { message: errorText } });
           }
         } catch (err) {
           console.error("Stage 1 execution error:", err);
@@ -285,6 +300,7 @@ INSTRUCTIONS:
       contents: formattedMessages,
       generationConfig: {
         temperature: 0.7,
+        maxOutputTokens: 600,
       }
     };
 
@@ -335,14 +351,7 @@ INSTRUCTIONS:
     if (!response || !response.ok) {
       const errorData = response ? await response.json().catch(() => ({})) : {};
       console.error('Gemini API Error:', errorData);
-      
-      const statusCode = response?.status || 500;
-      if (statusCode === 429 || statusCode === 503) {
-        return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again." }, { status: 429 });
-      }
-      
-      const safeErrorMsg = `RankUp AI encountered an issue processing your request. Please try again.`;
-      return NextResponse.json({ error: safeErrorMsg }, { status: statusCode });
+      return handleGeminiError(response, errorData);
     }
 
     const data = await response.json();

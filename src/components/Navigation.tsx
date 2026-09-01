@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { BookOpen, UserCircle, LogOut } from 'lucide-react';
+import { UserCircle, LogOut } from 'lucide-react';
+import Image from 'next/image';
 import { createClient } from '@/utils/supabase/client';
 import { User } from '@supabase/supabase-js';
 
@@ -52,9 +53,9 @@ export default function Navigation() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center gap-8">
-            <Link href="/" className="flex items-center space-x-2 shrink-0">
-              <BookOpen className="h-6 w-6 text-teal-600 dark:text-teal-400" />
-              <span className="text-xl font-bold text-stone-900 dark:text-stone-100 font-outfit">RankUp AI</span>
+            <Link href="/" className="flex items-center gap-2 shrink-0 py-1 hover:opacity-90 transition-opacity">
+              <Image src="/logo.png" alt="RankUp AI Logo" width={57} height={40} className="object-contain h-8 sm:h-9 w-auto" priority />
+              <span className="text-xl font-bold text-stone-900 dark:text-stone-100 font-outfit hidden sm:inline-block">RankUp AI</span>
             </Link>
             
             <div className="hidden sm:flex sm:items-center sm:space-x-1">

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { encryptAnswer } from '@/lib/evaluate';
 import staticTestEmbedding from '@/lib/static-test-embedding.json';
+import { handleGeminiError } from '@/lib/gemini-error-handler';
 
 import { SCIENCE_CHAPTERS, MATHS_CHAPTERS } from '@/lib/constants';
 
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
       if (rateLimitError) {
         console.error('Rate limit RPC error:', rateLimitError);
       } else if (isAllowed === false) {
-        return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again." }, { status: 429 });
+        return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again.", errorType: 'RATE_LIMIT_TEMPORARY' }, { status: 429 });
       }
     } catch (err) {
       console.error('Rate limit check failed:', err);
@@ -96,10 +97,9 @@ INSTRUCTIONS:
 6. For Numericals: Provide all necessary values from the context and ensure the answer is solvable.
    CRITICAL RULE: Any question that requires a calculated mathematical number or physical unit as the answer MUST be labeled with "type": "Numerical". Do NOT label calculations as "Short Answer".
 7. For Assertion-Reason: Assertion (A) and Reason (R) must be meaningful. Provide standard 4 options.
-8. Output the test in STRICT JSON format matching the schema below.
+8. Keep explanations proportional to question difficulty. They should be concise. Avoid duplicate explanations.
+9. Output the test in STRICT JSON format matching the schema below.
 ${subject === 'Mathematics' ? '\nSPECIAL MATHS RULE: You must use valid LaTeX formatting for all mathematical equations, symbols, and expressions inside the questions, options, and explanations. For example: \\(x^2 + y^2 = r^2\\) or $$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$. Do not use raw text like x^2.' : ''}
-7. For Assertion-Reason: Assertion (A) and Reason (R) must be meaningful. Provide standard 4 options.
-8. Output the test in STRICT JSON format matching the schema below.
 
 EXPECTED JSON SCHEMA:
 {
@@ -155,11 +155,9 @@ EXPECTED JSON SCHEMA:
     }
 
     if (!response || !response.ok) {
-      const statusCode = response?.status || 500;
-      if (statusCode === 429 || statusCode === 503) {
-        return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again." }, { status: 429 });
-      }
-      return NextResponse.json({ error: `Gemini API Error (HTTP ${statusCode})` }, { status: statusCode });
+      const errorData = response ? await response.json().catch(() => ({})) : {};
+      console.error('Test Generation API Error:', errorData);
+      return handleGeminiError(response, errorData);
     }
 
     const data = await response.json();

@@ -35,6 +35,7 @@ export default function TutorPage() {
   const [selectedImages, setSelectedImages] = useState<{ id: string, base64: string, mimeType: string, bytes: number }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isQuotaExhausted, setIsQuotaExhausted] = useState(false);
   const [subject, setSubject] = useState('Science');
   
   const [isCompressing, setIsCompressing] = useState(false);
@@ -138,6 +139,7 @@ export default function TutorPage() {
     setSelectedImages([]);
     setIsLoading(true);
     setError(null);
+    setIsQuotaExhausted(false);
     
     setShouldAutoScroll(true);
     setTimeout(() => {
@@ -165,6 +167,9 @@ export default function TutorPage() {
       const data = await response.json();
       
       if (!response.ok) {
+        if (data.errorType === 'QUOTA_EXHAUSTED') {
+          setIsQuotaExhausted(true);
+        }
         throw new Error(data.error || 'Something went wrong');
       }
       
@@ -362,12 +367,27 @@ export default function TutorPage() {
             </div>
           )}
 
-          {error && (
+          {isQuotaExhausted ? (
+            <div className="flex gap-4 justify-start">
+               <div className="w-8 h-8 rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center shrink-0 border border-stone-200 dark:border-stone-700">
+                  <Bot className="w-5 h-5 text-stone-600 dark:text-stone-400" />
+               </div>
+               <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl rounded-bl-sm p-5 shadow-sm max-w-sm">
+                  <div className="flex items-center gap-2 mb-2 text-red-800 dark:text-red-300 font-semibold">
+                    <AlertCircle className="w-5 h-5" />
+                    <h3>AI limit reached</h3>
+                  </div>
+                  <p className="text-sm text-red-700 dark:text-red-400/90 leading-relaxed">
+                    RankUp has reached its current AI usage limit. Please try again later.
+                  </p>
+               </div>
+            </div>
+          ) : error ? (
             <div className="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 p-4 rounded-xl text-sm border border-red-100 dark:border-red-900/50">
               <AlertCircle className="w-5 h-5 shrink-0" />
               <p>{error}</p>
             </div>
-          )}
+          ) : null}
           
           <div ref={messagesEndRef} />
         </div>
@@ -428,14 +448,15 @@ export default function TutorPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Message RankUp Tutor..."
-                className="w-full bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-2xl px-4 py-3.5 pr-14 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none resize-none overflow-hidden text-stone-900 dark:text-white transition-shadow"
+                disabled={isQuotaExhausted}
+                placeholder={isQuotaExhausted ? "AI limit reached. Please try later." : "Message RankUp Tutor..."}
+                className="w-full bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-2xl px-4 py-3.5 pr-14 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none resize-none overflow-hidden text-stone-900 dark:text-white transition-shadow disabled:opacity-60 disabled:cursor-not-allowed"
                 rows={1}
                 style={{ minHeight: '52px', maxHeight: '120px' }}
               />
               <button
                 onClick={handleSend}
-                disabled={(!input.trim() && selectedImages.length === 0) || isLoading || isCompressing}
+                disabled={isQuotaExhausted || (!input.trim() && selectedImages.length === 0) || isLoading || isCompressing}
                 className="absolute right-2 bottom-2 p-2 bg-teal-600 text-white rounded-xl hover:bg-teal-700 disabled:opacity-50 disabled:hover:bg-teal-600 transition-all shadow-sm"
               >
                 <Send className="w-5 h-5" />

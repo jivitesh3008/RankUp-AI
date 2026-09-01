@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { encryptAnswer } from '@/lib/evaluate';
 import { YoutubeTranscript } from 'youtube-transcript';
+import { handleGeminiError } from '@/lib/gemini-error-handler';
 
 // 45 minutes limit in milliseconds
 const MAX_VIDEO_DURATION_MS = 45 * 60 * 1000; 
@@ -52,7 +53,7 @@ export async function POST(req: Request) {
       if (rateLimitError) {
         console.error('Rate limit RPC error:', rateLimitError);
       } else if (isAllowed === false) {
-        return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again." }, { status: 429 });
+        return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again.", errorType: 'RATE_LIMIT_TEMPORARY' }, { status: 429 });
       }
     } catch (err) {
       console.error('Rate limit check failed:', err);
@@ -166,6 +167,7 @@ CRITICAL RULES:
 3. For Numerical questions: Label them as "type": "Numerical". Make sure the answer is solvable from the transcript.
 4. For MCQs: Ensure exactly ONE correct answer.
 5. Provide the 'sourceSection' for each question (e.g., the timestamp like "12:35").
+6. Keep explanations proportional to question difficulty. They should be concise. Avoid duplicate explanations.
 
 Return the output in EXACTLY this JSON schema:
 {
@@ -227,11 +229,9 @@ ${fullTranscript}
     }
 
     if (!response || !response.ok) {
-      const statusCode = response?.status || 500;
-      if (statusCode === 429 || statusCode === 503) {
-        return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again." }, { status: 429 });
-      }
-      return NextResponse.json({ error: `Gemini API Error (HTTP ${statusCode})` }, { status: statusCode });
+      const errorData = response ? await response.json().catch(() => ({})) : {};
+      console.error('YouTube Test Generation API Error:', errorData);
+      return handleGeminiError(response, errorData);
     }
 
     const data = await response.json();
@@ -270,7 +270,7 @@ ${fullTranscript}
     
     // Handle specific errors
     if (error.status === 429 || (error.message && error.message.includes('429'))) {
-       return NextResponse.json({ error: 'RankUp AI is temporarily busy. Please wait a moment and try again.' }, { status: 429 });
+       return NextResponse.json({ error: 'RankUp AI is temporarily busy. Please wait a moment and try again.', errorType: 'RATE_LIMIT_TEMPORARY' }, { status: 429 });
     }
     
     return NextResponse.json({ error: 'An unexpected error occurred during test generation.' }, { status: 500 });

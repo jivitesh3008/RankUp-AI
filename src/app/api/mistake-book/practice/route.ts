@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient as createServerClientLocal } from '@/utils/supabase/server';
 import { generateQueryEmbedding } from '@/lib/embeddings';
+import { handleGeminiError } from '@/lib/gemini-error-handler';
 
 export async function POST(req: Request) {
   try {
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
     if (rateLimitError) {
       console.error('Rate limit RPC error:', rateLimitError);
     } else if (isAllowed === false) {
-      return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again." }, { status: 429 });
+      return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again.", errorType: 'RATE_LIMIT_TEMPORARY' }, { status: 429 });
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
@@ -129,12 +130,9 @@ Note for Numerical: Only include the number or number with unit (e.g. '5' or '5 
     }
 
     if (!response || !response.ok) {
-       console.error("Failed to generate practice.");
-       const statusCode = response?.status || 500;
-       if (statusCode === 429 || statusCode === 503) {
-         return NextResponse.json({ error: "RankUp AI is temporarily busy. Please wait a moment and try again." }, { status: 429 });
-       }
-       return NextResponse.json({ error: 'Failed to generate practice questions.' }, { status: statusCode });
+       const errorData = response ? await response.json().catch(() => ({})) : {};
+       console.error("Failed to generate practice.", errorData);
+       return handleGeminiError(response, errorData);
     }
 
     const data = await response.json();
