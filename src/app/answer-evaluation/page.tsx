@@ -5,6 +5,7 @@ import { createClient } from '@/utils/supabase/client';
 import AuthPrompt from '@/components/AuthPrompt';
 import { compressImage } from '@/lib/image';
 import Link from 'next/link';
+import PageHeader from '@/components/PageHeader';
 
 export default function AnswerEvaluationPage() {
   const [user, setUser] = useState<any>('loading');
@@ -125,47 +126,61 @@ Can you guide me on how to fix this step-by-step?`;
   );
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-4rem)] max-w-5xl mx-auto p-4 sm:p-6 lg:p-8 w-full font-sans">
+    <div className="flex flex-col flex-1 max-w-5xl mx-auto p-4 sm:p-6 lg:p-8 w-full mb-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold font-outfit text-stone-900 dark:text-stone-100 flex items-center gap-3 mb-2">
-          <FileText className="w-8 h-8 text-teal-600" />
-          Check My Answer
-        </h1>
-        <p className="text-stone-500 dark:text-stone-400">Upload your handwritten answer and get AI-estimated feedback to improve.</p>
+        <PageHeader title="Check My Answer" backHref="/" />
+        <p className="text-foreground/60 ml-[3.25rem] -mt-2">Upload your handwritten answer and get AI feedback to improve.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
         
         {/* INPUT SECTION */}
         <div className="space-y-6">
-          <div className="bg-white dark:bg-stone-900 p-6 rounded-2xl border border-stone-200 dark:border-stone-800 shadow-sm">
-            <h2 className="text-base font-semibold font-outfit text-stone-900 dark:text-stone-100 mb-4 flex items-center gap-2">
-              <Settings2 className="w-4 h-4 text-stone-400" />
+          <div className="bg-card-bg p-6 rounded-3xl border border-card-border shadow-sm">
+            <h2 className="text-base font-semibold font-outfit text-foreground mb-4 flex items-center gap-2">
+              <Settings2 className="w-4 h-4 text-foreground/40" />
               1. Answer Details
             </h2>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-2">Question (Optional if in image)</label>
+                <label className="block text-xs font-bold text-foreground/50 mb-2 uppercase tracking-wider">Question (Optional if in image)</label>
                 <textarea
                   value={questionText}
                   onChange={(e) => setQuestionText(e.target.value)}
                   placeholder="Type the question here..."
-                  className="w-full bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-teal-500 outline-none resize-y min-h-[100px] text-stone-900 dark:text-stone-100 text-sm shadow-sm transition-shadow"
+                  className="w-full bg-background border border-card-border rounded-xl px-4 py-3 focus:ring-1 focus:ring-primary-500 outline-none resize-y min-h-[100px] text-foreground text-sm shadow-sm transition-shadow"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-2">Maximum Marks</label>
-                <div className="flex flex-wrap gap-2">
+                <label className="block text-xs font-bold text-foreground/50 mb-2 uppercase tracking-wider">Maximum Marks</label>
+                <div className="flex flex-wrap bg-background border border-card-border p-1 rounded-xl">
                   {['1', '2', '3', '4', '5'].map((mark) => (
-                    <SelectionButton key={mark} active={maxMarks === mark} onClick={() => setMaxMarks(mark)}>
+                    <button
+                      key={mark}
+                      type="button"
+                      onClick={() => setMaxMarks(mark)}
+                      className={`flex-1 text-sm font-medium py-2 px-3 rounded-lg transition-all duration-200 ${
+                        maxMarks === mark
+                          ? 'bg-card-bg shadow-sm text-foreground' 
+                          : 'text-foreground/60 hover:text-foreground'
+                      }`}
+                    >
                       {mark}
-                    </SelectionButton>
+                    </button>
                   ))}
-                  <SelectionButton active={maxMarks === 'custom'} onClick={() => setMaxMarks('custom')}>
+                  <button
+                    type="button"
+                    onClick={() => setMaxMarks('custom')}
+                    className={`flex-1 text-sm font-medium py-2 px-3 rounded-lg transition-all duration-200 ${
+                      maxMarks === 'custom'
+                        ? 'bg-card-bg shadow-sm text-foreground' 
+                        : 'text-foreground/60 hover:text-foreground'
+                    }`}
+                  >
                     Custom
-                  </SelectionButton>
+                  </button>
                 </div>
                 {maxMarks === 'custom' && (
                   <input
@@ -173,16 +188,16 @@ Can you guide me on how to fix this step-by-step?`;
                     value={customMarks}
                     onChange={(e) => setCustomMarks(e.target.value)}
                     placeholder="Enter marks"
-                    className="mt-3 w-full max-w-[150px] bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none text-stone-900 dark:text-stone-100 shadow-sm"
+                    className="mt-3 w-full max-w-[150px] bg-background border border-card-border rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-primary-500 outline-none text-foreground shadow-sm"
                   />
                 )}
               </div>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-stone-900 p-6 rounded-2xl border border-stone-200 dark:border-stone-800 shadow-sm">
-            <h2 className="text-base font-semibold font-outfit text-stone-900 dark:text-stone-100 mb-4 flex items-center gap-2">
-              <ImageIcon className="w-4 h-4 text-stone-400" />
+          <div className="bg-card-bg p-6 rounded-3xl border border-card-border shadow-sm">
+            <h2 className="text-base font-semibold font-outfit text-foreground mb-4 flex items-center gap-2">
+              <ImageIcon className="w-4 h-4 text-foreground/40" />
               2. Upload Answer
             </h2>
             
@@ -197,27 +212,29 @@ Can you guide me on how to fix this step-by-step?`;
             {!selectedImage && !isCompressing && (
               <button 
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full flex flex-col items-center justify-center gap-3 border-2 border-dashed border-stone-300 dark:border-stone-700 rounded-xl p-8 hover:bg-stone-50 dark:hover:bg-stone-800/50 hover:border-teal-400 dark:hover:border-teal-600 transition-all text-stone-500 dark:text-stone-400"
+                className="w-full flex flex-col items-center justify-center gap-3 border-2 border-dashed border-card-border rounded-2xl p-8 hover:bg-card-border/50 hover:border-primary-500/50 transition-all text-foreground/50 tap-scale"
               >
-                <Upload className="w-8 h-8 text-stone-400" />
+                <div className="w-12 h-12 rounded-full bg-background flex items-center justify-center border border-card-border shadow-sm">
+                   <Upload className="w-5 h-5 text-foreground/60" />
+                </div>
                 <span className="text-sm font-medium">Click to choose image</span>
               </button>
             )}
 
             {isCompressing && (
-              <div className="w-full flex flex-col items-center justify-center gap-3 border-2 border-dashed border-stone-300 dark:border-stone-700 rounded-xl p-8 text-teal-600 bg-teal-50 dark:bg-teal-900/20">
+              <div className="w-full flex flex-col items-center justify-center gap-3 border-2 border-dashed border-card-border rounded-2xl p-8 text-primary-500 bg-primary-500/5">
                 <Loader2 className="w-8 h-8 animate-spin" />
                 <span className="text-sm font-medium">Optimizing image...</span>
               </div>
             )}
 
             {selectedImage && !isCompressing && (
-              <div className="relative rounded-xl overflow-hidden border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 p-2 shadow-sm">
-                <img src={`data:${selectedImageMime};base64,${selectedImage}`} alt="Answer preview" className="w-full h-auto object-contain max-h-[300px] rounded-lg border border-stone-200 dark:border-stone-700" />
+              <div className="relative rounded-2xl overflow-hidden border border-card-border bg-background p-2 shadow-sm">
+                <img src={`data:${selectedImageMime};base64,${selectedImage}`} alt="Answer preview" className="w-full h-auto object-contain max-h-[300px] rounded-xl border border-card-border" />
                 <div className="absolute top-4 right-4 flex gap-2">
                   <button 
                     onClick={() => fileInputRef.current?.click()}
-                    className="bg-white/90 dark:bg-stone-900/90 backdrop-blur-sm hover:bg-white dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition-colors border border-stone-200 dark:border-stone-700"
+                    className="bg-black/60 backdrop-blur-md hover:bg-black/80 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition-colors tap-scale"
                   >
                     Change
                   </button>
@@ -229,7 +246,7 @@ Can you guide me on how to fix this step-by-step?`;
           <button
             onClick={handleEvaluate}
             disabled={!selectedImage || isEvaluating || isCompressing}
-            className="w-full flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:hover:bg-teal-600 text-white font-medium py-4 px-4 rounded-xl shadow-sm transition-all"
+            className="w-full flex items-center justify-center gap-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:hover:bg-primary-600 text-white font-bold py-4 px-4 rounded-xl shadow-lg shadow-primary-500/20 transition-all tap-scale text-lg"
           >
             {isEvaluating ? (
               <>
@@ -239,13 +256,13 @@ Can you guide me on how to fix this step-by-step?`;
             ) : (
               <>
                 <SearchCheck className="w-5 h-5" />
-                <span>Evaluate Answer</span>
+                <span>Evaluate Answer ✨</span>
               </>
             )}
           </button>
 
           {error && (
-            <div className="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 p-4 rounded-xl text-sm border border-red-100 dark:border-red-900/50">
+            <div className="flex items-center gap-2 text-red-400 bg-red-500/10 p-4 rounded-xl text-sm border border-red-500/20">
               <AlertCircle className="w-5 h-5 shrink-0" />
               <p>{error}</p>
             </div>
@@ -255,28 +272,28 @@ Can you guide me on how to fix this step-by-step?`;
         {/* RESULTS SECTION */}
         <div>
           {evaluation ? (
-             <div className="bg-white dark:bg-stone-900 p-6 sm:p-8 rounded-2xl border border-teal-200 dark:border-teal-900/50 shadow-sm sticky top-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
+             <div className="bg-card-bg p-6 sm:p-8 rounded-3xl border border-primary-500/30 shadow-sm sticky top-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
                <div className="flex items-start justify-between mb-8">
                  <div>
-                   <h2 className="text-2xl font-bold font-outfit text-stone-900 dark:text-stone-100">Evaluation</h2>
-                   <div className="flex items-center gap-2 mt-2">
-                     <span className={`text-xs font-medium px-2.5 py-1 rounded-md ${
-                       evaluation.evaluation.confidence === 'High' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800 dark:text-emerald-400' :
-                       evaluation.evaluation.confidence === 'Low' ? 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-400' :
-                       'bg-stone-100 text-stone-700 border border-stone-200 dark:bg-stone-800 dark:border-stone-700 dark:text-stone-400'
+                   <h2 className="text-2xl font-bold font-outfit text-foreground">Evaluation</h2>
+                   <div className="flex flex-wrap items-center gap-2 mt-2">
+                     <span className={`text-xs font-bold px-2.5 py-1 rounded-md uppercase tracking-wider ${
+                       evaluation.evaluation.confidence === 'High' ? 'bg-accent-emerald-500/10 text-accent-emerald-500 border border-accent-emerald-500/20' :
+                       evaluation.evaluation.confidence === 'Low' ? 'bg-accent-amber-500/10 text-accent-amber-500 border border-accent-amber-500/20' :
+                       'bg-background text-foreground/60 border border-card-border'
                      }`}>
                        Confidence: {evaluation.evaluation.confidence}
                      </span>
-                     <span className="text-xs text-stone-500 dark:text-stone-400 font-medium bg-stone-100 dark:bg-stone-800 px-2.5 py-1 rounded-md">
+                     <span className="text-xs text-foreground/60 font-bold bg-background px-2.5 py-1 rounded-md border border-card-border">
                        {evaluation.topic}
                      </span>
                    </div>
                  </div>
-                 <div className="bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800/50 px-5 py-3 rounded-xl text-center min-w-[90px]">
-                   <div className="text-xs font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400 mb-1">Score</div>
-                   <div className="text-3xl font-bold font-outfit text-teal-800 dark:text-teal-300">
+                 <div className="bg-primary-500/10 border border-primary-500/20 px-5 py-3 rounded-xl text-center min-w-[90px]">
+                   <div className="text-xs font-bold uppercase tracking-wider text-primary-500 mb-1">Score</div>
+                   <div className="text-3xl font-bold font-outfit text-primary-400">
                      {evaluation.evaluation.estimatedMarks !== null ? evaluation.evaluation.estimatedMarks : '-'} 
-                     <span className="text-lg font-normal text-teal-500 dark:text-teal-600"> / {maxMarks === 'custom' ? customMarks : maxMarks}</span>
+                     <span className="text-lg font-normal text-primary-500/50"> / {maxMarks === 'custom' ? customMarks : maxMarks}</span>
                    </div>
                  </div>
                </div>
@@ -284,13 +301,13 @@ Can you guide me on how to fix this step-by-step?`;
                <div className="space-y-6">
                  {evaluation.evaluation.strengths && evaluation.evaluation.strengths.length > 0 && (
                    <div>
-                     <h3 className="text-sm font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-2 mb-3">
+                     <h3 className="text-sm font-bold text-accent-emerald-500 uppercase tracking-wider flex items-center gap-2 mb-3">
                        <CheckCircle className="w-4 h-4" /> What you did well
                      </h3>
                      <ul className="space-y-2.5">
                        {evaluation.evaluation.strengths.map((item: string, i: number) => (
-                         <li key={i} className="text-sm text-stone-700 dark:text-stone-300 flex items-start gap-3 bg-emerald-50/50 dark:bg-emerald-900/10 p-3 rounded-lg border border-emerald-100/50 dark:border-emerald-800/30">
-                           <span className="text-emerald-500 mt-0.5">•</span>
+                         <li key={i} className="text-sm text-foreground flex items-start gap-3 bg-accent-emerald-500/10 p-4 rounded-xl border border-accent-emerald-500/20">
+                           <span className="text-accent-emerald-500 mt-0.5">•</span>
                            <span className="leading-relaxed">{item}</span>
                          </li>
                        ))}
@@ -300,19 +317,19 @@ Can you guide me on how to fix this step-by-step?`;
 
                  {(evaluation.evaluation.mistakes?.length > 0 || evaluation.evaluation.missingSteps?.length > 0) && (
                    <div>
-                     <h3 className="text-sm font-bold text-amber-700 dark:text-amber-500 uppercase tracking-wider flex items-center gap-2 mb-3 mt-6">
+                     <h3 className="text-sm font-bold text-accent-amber-500 uppercase tracking-wider flex items-center gap-2 mb-3 mt-6">
                        <AlertCircle className="w-4 h-4" /> What you missed
                      </h3>
                      <ul className="space-y-2.5">
                        {evaluation.evaluation.mistakes?.map((item: string, i: number) => (
-                         <li key={`mistake-${i}`} className="text-sm text-stone-700 dark:text-stone-300 flex items-start gap-3 bg-amber-50/50 dark:bg-amber-900/10 p-3 rounded-lg border border-amber-100/50 dark:border-amber-800/30">
-                           <span className="text-amber-500 mt-0.5">⚠️</span>
+                         <li key={`mistake-${i}`} className="text-sm text-foreground flex items-start gap-3 bg-accent-amber-500/10 p-4 rounded-xl border border-accent-amber-500/20">
+                           <span className="text-accent-amber-500 mt-0.5">⚠️</span>
                            <span className="leading-relaxed">{item}</span>
                          </li>
                        ))}
                        {evaluation.evaluation.missingSteps?.map((item: string, i: number) => (
-                         <li key={`missing-${i}`} className="text-sm text-stone-700 dark:text-stone-300 flex items-start gap-3 bg-amber-50/50 dark:bg-amber-900/10 p-3 rounded-lg border border-amber-100/50 dark:border-amber-800/30">
-                           <span className="text-amber-500 mt-0.5">⚠️</span>
+                         <li key={`missing-${i}`} className="text-sm text-foreground flex items-start gap-3 bg-accent-amber-500/10 p-4 rounded-xl border border-accent-amber-500/20">
+                           <span className="text-accent-amber-500 mt-0.5">⚠️</span>
                            <span className="leading-relaxed">{item}</span>
                          </li>
                        ))}
@@ -321,35 +338,35 @@ Can you guide me on how to fix this step-by-step?`;
                  )}
 
                  {evaluation.evaluation.improvementTips && evaluation.evaluation.improvementTips.length > 0 && (
-                   <div className="bg-stone-50 dark:bg-stone-800/50 rounded-xl p-5 border border-stone-200 dark:border-stone-700 mt-6">
-                     <h3 className="text-sm font-bold text-stone-800 dark:text-stone-200 uppercase tracking-wider flex items-center gap-2 mb-2">
-                       <Lightbulb className="w-4 h-4 text-amber-500" /> How to improve
+                   <div className="bg-background rounded-xl p-5 border border-card-border mt-6 shadow-sm">
+                     <h3 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2 mb-2">
+                       <Lightbulb className="w-4 h-4 text-accent-amber-500" /> How to improve
                      </h3>
-                     <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed mt-2">
+                     <p className="text-sm text-foreground/80 leading-relaxed mt-2">
                        {evaluation.evaluation.improvementTips.join(' ')}
                      </p>
                    </div>
                  )}
                </div>
 
-               <div className="mt-8 pt-6 border-t border-stone-100 dark:border-stone-800">
+               <div className="mt-8 pt-6 border-t border-card-border">
                  <Link 
                    href={`/tutor?prefill=${getSocraticPrefill()}`}
-                   className="w-full flex items-center justify-center gap-2 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-900 dark:text-stone-100 font-medium py-3 px-4 rounded-xl transition-colors border border-stone-200 dark:border-stone-700 shadow-sm"
+                   className="w-full flex items-center justify-center gap-2 bg-background hover:bg-card-border text-foreground font-bold py-4 px-4 rounded-xl transition-colors border border-card-border shadow-sm tap-scale"
                  >
                    <span>Help me improve this answer</span>
-                   <ArrowRight className="w-4 h-4 text-stone-500" />
+                   <ArrowRight className="w-4 h-4 text-foreground/50" />
                  </Link>
                </div>
 
              </div>
           ) : (
-            <div className="bg-stone-50 dark:bg-stone-800/30 rounded-2xl border border-dashed border-stone-300 dark:border-stone-700 h-full min-h-[400px] flex flex-col items-center justify-center p-8 text-center">
-               <div className="w-16 h-16 bg-white dark:bg-stone-900 rounded-2xl flex items-center justify-center shadow-sm mb-4 border border-stone-100 dark:border-stone-800">
-                 <SearchCheck className="w-8 h-8 text-stone-400 dark:text-stone-500" />
+            <div className="bg-card-bg/50 rounded-3xl border border-dashed border-card-border h-full min-h-[400px] flex flex-col items-center justify-center p-8 text-center">
+               <div className="w-16 h-16 bg-background rounded-2xl flex items-center justify-center shadow-sm mb-4 border border-card-border">
+                 <SearchCheck className="w-8 h-8 text-foreground/40" />
                </div>
-               <h3 className="text-lg font-medium font-outfit text-stone-700 dark:text-stone-300 mb-2">Ready to evaluate</h3>
-               <p className="text-sm text-stone-500 dark:text-stone-400 max-w-xs">
+               <h3 className="text-lg font-medium font-outfit text-foreground mb-2">Ready to evaluate</h3>
+               <p className="text-sm text-foreground/50 max-w-xs">
                  Fill out the details and upload your answer to get an AI-estimated evaluation based on NCERT standards.
                </p>
             </div>

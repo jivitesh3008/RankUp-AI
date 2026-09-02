@@ -84,7 +84,7 @@ export default function PrivacyPage() {
 
         <h2>8. Contact Us</h2>
         <p>
-          If you have questions about this Privacy Policy or your data, please contact our Privacy Team at <strong>privacy@rankup.ai</strong> (Placeholder: Requires update before launch).
+          If you have questions about this Privacy Policy or your data, please contact our Privacy Team.
         </p>
       </div>
     </div>

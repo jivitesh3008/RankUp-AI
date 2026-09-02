@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/server';
 import AuthPrompt from '@/components/AuthPrompt';
 import { Activity, BookOpen, BrainCircuit, CheckCircle2, Clock, FileCheck, Target, TrendingUp, BookMarked } from 'lucide-react';
 import Link from 'next/link';
+import PageHeader from '@/components/PageHeader';
 
 export default async function ProgressPage() {
   const supabase = await createClient();
@@ -83,13 +84,10 @@ export default async function ProgressPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-4rem)] p-4 sm:p-6 max-w-5xl mx-auto w-full font-sans">
+    <div className="flex flex-col flex-1 p-4 sm:p-6 max-w-5xl mx-auto w-full font-sans mb-8">
       <div className="mb-8">
-         <h1 className="text-3xl font-bold font-outfit text-stone-900 dark:text-stone-100 flex items-center gap-3 mb-2">
-           <TrendingUp className="w-8 h-8 text-teal-600" />
-           My Progress
-         </h1>
-         <p className="text-stone-500 dark:text-stone-400">Welcome back. Here's a snapshot of your learning journey.</p>
+         <PageHeader title="My Progress" backHref="/" />
+         <p className="text-foreground/60 -mt-2 ml-[3.25rem]">Welcome back. Here's a snapshot of your learning journey.</p>
       </div>
       
       {testsCompleted === 0 && evaluationsCompleted === 0 && (!activity || activity.length === 0) ? (

@@ -112,11 +112,11 @@ export default function PracticeModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-stone-900 rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] border border-stone-200 dark:border-stone-800">
-        <div className="flex items-center justify-between p-5 border-b border-stone-100 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50">
-          <h2 className="text-xl font-bold font-outfit text-stone-900 dark:text-stone-100">Practice My Mistake</h2>
-          <button onClick={onClose} className="p-2 hover:bg-stone-200 dark:hover:bg-stone-800 rounded-full transition-colors text-stone-500">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+      <div className="bg-background rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] border border-card-border">
+        <div className="flex items-center justify-between p-5 border-b border-card-border bg-card-bg">
+          <h2 className="text-xl font-bold font-outfit text-foreground">Practice My Mistake</h2>
+          <button onClick={onClose} className="p-2 hover:bg-card-border rounded-full transition-colors text-foreground/50 tap-scale">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -124,27 +124,27 @@ export default function PracticeModal({
         <div className="p-6 flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16 gap-4">
-              <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
-              <p className="text-stone-500 dark:text-stone-400 font-medium">Generating focused practice questions...</p>
+              <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
+              <p className="text-foreground/60 font-bold">Generating focused practice questions...</p>
             </div>
           ) : error ? (
             <div className="text-center py-12">
-              <p className="text-red-600 mb-4 bg-red-50 dark:bg-red-900/20 p-4 rounded-xl inline-block border border-red-100 dark:border-red-900/50">{error}</p>
+              <p className="text-red-400 mb-4 bg-red-500/10 p-4 rounded-xl inline-block border border-red-500/20">{error}</p>
               <div>
-                <button onClick={loadPractice} className="mt-4 px-6 py-2.5 bg-stone-900 dark:bg-white rounded-xl text-sm font-medium hover:bg-stone-800 dark:hover:bg-stone-200 text-white dark:text-stone-900 transition-colors">
+                <button onClick={loadPractice} className="mt-4 px-6 py-2.5 bg-background border border-card-border rounded-xl text-sm font-bold hover:bg-card-bg text-foreground transition-colors tap-scale">
                   Try Again
                 </button>
               </div>
             </div>
           ) : showResults ? (
             <div className="text-center py-8">
-              <div className="w-24 h-24 mx-auto rounded-full flex items-center justify-center mb-6 bg-stone-50 dark:bg-stone-800 border-4 border-stone-100 dark:border-stone-700">
-                <span className="text-4xl font-bold font-outfit text-stone-900 dark:text-stone-100">{score}<span className="text-2xl text-stone-400">/{questions.length}</span></span>
+              <div className="w-24 h-24 mx-auto rounded-full flex items-center justify-center mb-6 bg-card-bg border-4 border-card-border shadow-sm">
+                <span className="text-4xl font-bold font-outfit text-foreground">{score}<span className="text-2xl text-foreground/40">/{questions.length}</span></span>
               </div>
-              <h3 className="text-2xl font-bold font-outfit text-stone-900 dark:text-stone-100 mb-2">
-                {score === questions.length ? "Great job!" : "Keep practicing."}
+              <h3 className="text-2xl font-bold font-outfit text-foreground mb-2">
+                {score === questions.length ? "Great job! ✨" : "Keep practicing."}
               </h3>
-              <p className="text-stone-500 dark:text-stone-400 mb-8 max-w-sm mx-auto">
+              <p className="text-foreground/60 mb-8 max-w-sm mx-auto">
                 {score === questions.length ? "You have successfully demonstrated the concept." : "Review the correct answers below and try again later."}
               </p>
               
@@ -159,39 +159,39 @@ export default function PracticeModal({
                   }
                   
                   return (
-                    <div key={q.id} className="p-5 rounded-2xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-800/30">
-                      <p className="font-medium text-stone-900 dark:text-stone-100 mb-4">{i+1}. {q.question}</p>
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-4 text-sm bg-white dark:bg-stone-900 p-3 rounded-xl border border-stone-100 dark:border-stone-700">
+                    <div key={q.id} className="p-5 rounded-2xl border border-card-border bg-card-bg">
+                      <p className="font-bold text-foreground mb-4">{i+1}. {q.question}</p>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-4 text-sm bg-background p-4 rounded-xl border border-card-border">
                          <div className="flex items-center gap-2">
-                           {isCorrect ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <XCircle className="w-5 h-5 text-red-500" />}
-                           <span className={`font-medium ${isCorrect ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>Your answer: {uAns || '(skipped)'}</span>
+                           {isCorrect ? <CheckCircle2 className="w-5 h-5 text-accent-emerald-500" /> : <XCircle className="w-5 h-5 text-red-500" />}
+                           <span className={`font-bold ${isCorrect ? 'text-accent-emerald-500' : 'text-red-400'}`}>Your answer: {uAns || '(skipped)'}</span>
                          </div>
                          {!isCorrect && (
-                           <div className="flex items-center gap-2 sm:ml-4 sm:pl-4 sm:border-l border-stone-200 dark:border-stone-700">
-                             <CheckCircle2 className="w-5 h-5 text-stone-400" />
-                             <span className="font-medium text-stone-700 dark:text-stone-300">Correct: {q.correctAnswer}</span>
+                           <div className="flex items-center gap-2 sm:ml-4 sm:pl-4 sm:border-l border-card-border">
+                             <CheckCircle2 className="w-5 h-5 text-foreground/40" />
+                             <span className="font-bold text-foreground/80">Correct: {q.correctAnswer}</span>
                            </div>
                          )}
                       </div>
-                      <p className="text-sm text-stone-600 dark:text-stone-400 mt-4 pt-4 border-t border-stone-200 dark:border-stone-700 leading-relaxed">{q.explanation}</p>
+                      <p className="text-sm text-foreground/70 mt-4 pt-4 border-t border-card-border leading-relaxed">{q.explanation}</p>
                     </div>
                   );
                 })}
               </div>
               
-              <button onClick={onClose} className="mt-8 px-10 py-3 bg-teal-600 text-white rounded-xl font-medium hover:bg-teal-700 transition-colors shadow-sm">
+              <button onClick={onClose} className="mt-8 px-10 py-3 bg-primary-600 text-white rounded-xl font-bold hover:bg-primary-700 transition-colors shadow-sm tap-scale w-full sm:w-auto">
                 Close
               </button>
             </div>
           ) : (
             <div className="flex flex-col h-full min-h-[300px]">
-              <div className="flex justify-between items-center text-sm font-medium text-stone-500 mb-8">
+              <div className="flex justify-between items-center text-sm font-bold text-foreground/50 mb-8">
                 <span>Question {currentIndex + 1} of {questions.length}</span>
-                <span className="px-3 py-1 bg-stone-100 dark:bg-stone-800 rounded-lg text-xs uppercase tracking-wider font-semibold">{questions[currentIndex].type}</span>
+                <span className="px-3 py-1 bg-card-bg border border-card-border rounded-lg text-xs uppercase tracking-wider">{questions[currentIndex].type}</span>
               </div>
               
               <div className="flex-1">
-                <p className="text-xl font-medium text-stone-900 dark:text-stone-100 mb-8 leading-relaxed">
+                <p className="text-xl font-medium text-foreground mb-8 leading-relaxed">
                   {questions[currentIndex].question}
                 </p>
                 
@@ -201,10 +201,10 @@ export default function PracticeModal({
                       <button
                         key={i}
                         onClick={() => setAnswers(prev => ({ ...prev, [questions[currentIndex].id]: opt }))}
-                        className={`w-full text-left p-4 rounded-xl border transition-all duration-200 ${
+                        className={`w-full text-left p-4 rounded-2xl border transition-all duration-200 tap-scale ${
                           answers[questions[currentIndex].id] === opt 
-                            ? 'bg-teal-50 dark:bg-teal-900/30 border-teal-500 text-teal-900 dark:text-teal-100 shadow-sm scale-[1.01]'
-                            : 'bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600 hover:bg-stone-50 dark:hover:bg-stone-800'
+                            ? 'bg-primary-500/10 border-primary-500 text-primary-400 shadow-sm'
+                            : 'bg-background border-card-border text-foreground/80 hover:border-foreground/20 hover:bg-card-bg'
                         }`}
                       >
                         {opt}
@@ -217,7 +217,7 @@ export default function PracticeModal({
                     placeholder="Type your answer here..."
                     value={answers[questions[currentIndex].id] || ''}
                     onChange={(e) => setAnswers(prev => ({ ...prev, [questions[currentIndex].id]: e.target.value }))}
-                    className="w-full bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl px-4 py-4 outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-stone-900 dark:text-stone-100 shadow-sm transition-shadow"
+                    className="w-full bg-background border border-card-border rounded-2xl px-4 py-4 outline-none focus:ring-1 focus:ring-primary-500 text-foreground shadow-sm transition-shadow"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') handleNext();
                     }}
@@ -229,7 +229,7 @@ export default function PracticeModal({
                 <button 
                   onClick={handleNext}
                   disabled={updating}
-                  className="px-6 py-3 bg-stone-900 dark:bg-white text-white dark:text-stone-900 rounded-xl text-sm font-semibold hover:bg-stone-800 dark:hover:bg-stone-200 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
+                  className="px-6 py-3 bg-primary-600 text-white rounded-xl text-sm font-bold hover:bg-primary-700 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50 tap-scale"
                 >
                   {currentIndex < questions.length - 1 ? 'Next Question' : updating ? 'Grading...' : 'Finish Practice'}
                   {currentIndex < questions.length - 1 && <ArrowRight className="w-4 h-4" />}

@@ -69,7 +69,7 @@ export default function TermsPage() {
 
         <h2>9. Contact Information</h2>
         <p>
-          For any questions about these Terms, please contact our Legal Team at <strong>legal@rankup.ai</strong> (Placeholder: Requires update before launch).
+          For any questions about these Terms, please contact our Legal Team.
         </p>
       </div>
     </div>

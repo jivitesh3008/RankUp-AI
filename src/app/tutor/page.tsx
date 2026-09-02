@@ -246,17 +246,23 @@ export default function TutorPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] max-w-5xl mx-auto p-4 sm:p-6 w-full">
-      <div className="flex justify-between items-center mb-4">
+    <div className="flex flex-col flex-1 max-w-4xl mx-auto p-4 sm:p-6 w-full mb-8">
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold font-outfit text-stone-900 dark:text-stone-100">RankUp Tutor</h1>
-          <p className="text-sm text-stone-500 dark:text-stone-400">Let's work through it together.</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold font-outfit text-foreground">AI Tutor</h1>
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-accent-emerald-500/10 rounded-full border border-accent-emerald-500/20">
+              <div className="w-1.5 h-1.5 rounded-full bg-accent-emerald-500 animate-pulse" />
+              <span className="text-[10px] font-bold text-accent-emerald-500 uppercase tracking-wider">Online</span>
+            </div>
+          </div>
+          <p className="text-sm text-foreground/60 mt-1">Let's work through it together.</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <select 
             value={subject} 
             onChange={(e) => setSubject(e.target.value)}
-            className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg px-3 py-2 text-sm text-stone-700 dark:text-stone-300 outline-none focus:border-teal-500"
+            className="bg-card-bg border border-card-border rounded-xl px-3 py-2 text-sm text-foreground outline-none focus:border-primary-500 transition-colors"
           >
             <option>Science</option>
             <option>Mathematics</option>
@@ -264,7 +270,7 @@ export default function TutorPage() {
           </select>
           <button 
             onClick={clearChat}
-            className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+            className="p-2 text-foreground/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-colors"
             title="Clear conversation"
           >
             <Trash2 className="w-5 h-5" />
@@ -272,51 +278,51 @@ export default function TutorPage() {
         </div>
       </div>
 
-      <div className="flex-1 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl flex flex-col overflow-hidden shadow-sm">
+      <div className="flex-1 bg-card-bg border border-card-border rounded-3xl flex flex-col overflow-hidden shadow-sm h-[600px] min-h-[60vh]">
         <div 
           className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6"
           ref={chatContainerRef}
           onScroll={handleScroll}
         >
           {messages.map((msg) => (
-            <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               {msg.role === 'assistant' && (
-                <div className="w-8 h-8 rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center shrink-0 border border-stone-200 dark:border-stone-700">
-                  <Bot className="w-5 h-5 text-stone-600 dark:text-stone-400" />
+                <div className="w-8 h-8 rounded-full bg-primary-500/10 flex items-center justify-center shrink-0 border border-primary-500/20 mt-1">
+                  <Bot className="w-4 h-4 text-primary-500" />
                 </div>
               )}
-              <div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-5 py-3.5 ${
+              <div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-3 ${
                 msg.role === 'user' 
-                  ? 'bg-teal-600 text-white rounded-br-sm shadow-sm' 
-                  : 'bg-stone-50 dark:bg-stone-800 text-stone-800 dark:text-stone-200 rounded-bl-sm border border-stone-100 dark:border-stone-700 shadow-sm'
+                  ? 'bg-primary-600 text-white rounded-br-sm shadow-sm' 
+                  : 'bg-background text-foreground rounded-bl-sm border border-card-border shadow-sm'
               }`}>
                 {msg.imageContext && (!msg.images || msg.images.length === 0) && (
-                   <div className="flex items-center gap-1.5 mb-2 text-teal-200 text-xs font-medium">
+                   <div className="flex items-center gap-1.5 mb-2 text-primary-200 text-xs font-medium">
                      <CheckCircle2 className="w-3.5 h-3.5" />
                      <span>Image context reused</span>
                    </div>
                 )}
                 {msg.images && msg.images.length > 0 && (
-                  <div className="mb-3 flex flex-wrap gap-3">
+                  <div className="mb-3 flex flex-wrap gap-2">
                     {msg.images.map((img, idx) => (
                       <div key={idx} className="relative">
                         <div className="absolute top-1 left-1 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md z-10 backdrop-blur-sm">
                           {idx + 1}
                         </div>
-                        <img src={`data:${img.mimeType};base64,${img.base64}`} alt={`Attached content ${idx + 1}`} className="max-h-48 rounded-xl object-contain border border-teal-500/30" />
+                        <img src={`data:${img.mimeType};base64,${img.base64}`} alt={`Attached content ${idx + 1}`} className="max-h-48 rounded-xl object-contain border border-primary-500/30 bg-black/20" />
                       </div>
                     ))}
                   </div>
                 )}
                 {msg.imageContext && msg.images && msg.images.length > 0 && (
-                   <div className="flex items-center gap-1.5 mt-2 text-teal-100 text-xs font-medium bg-teal-700/50 px-2 py-1.5 rounded-lg inline-flex">
+                   <div className="flex items-center gap-1.5 mt-2 text-primary-100 text-xs font-medium bg-primary-700/50 px-2 py-1.5 rounded-lg inline-flex">
                      <CheckCircle2 className="w-3.5 h-3.5" />
                      <span>{msg.images.length} image{msg.images.length > 1 ? 's' : ''} analyzed</span>
                    </div>
                 )}
                 {msg.role === 'assistant' ? (
                   <div className="flex flex-col gap-2">
-                    <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_.math-display]:overflow-x-auto [&_.math-display]:overflow-y-hidden [&_.math-display]:py-2 [&_.math-display]:scrollbar-thin [&_.math-display]:scrollbar-thumb-stone-300 dark:[&_.math-display]:scrollbar-thumb-stone-600">
+                    <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_.math-display]:overflow-x-auto [&_.math-display]:overflow-y-hidden [&_.math-display]:py-2 [&_.math-display]:scrollbar-thin [&_.math-display]:scrollbar-thumb-card-border">
                       <ReactMarkdown
                         remarkPlugins={[remarkMath]}
                         rehypePlugins={[rehypeKatex]}
@@ -325,15 +331,15 @@ export default function TutorPage() {
                       </ReactMarkdown>
                     </div>
                     {msg.misconception && (
-                      <div className="mt-1 pt-2 border-t border-stone-200 dark:border-stone-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <span className="text-xs text-amber-600 dark:text-amber-500 font-medium flex items-center gap-1.5">
+                      <div className="mt-2 pt-3 border-t border-card-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <span className="text-xs text-accent-amber-500 font-medium flex items-center gap-1.5">
                           <AlertCircle className="w-3.5 h-3.5" />
                           Misconception identified
                         </span>
                         <button
                           onClick={() => handleSaveMistake(msg.id, msg.misconception!)}
                           disabled={msg.mistakeSaved}
-                          className={`text-xs font-medium px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${msg.mistakeSaved ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800 shadow-sm'}`}
+                          className={`text-xs font-medium px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors tap-scale ${msg.mistakeSaved ? 'bg-accent-emerald-500/10 text-accent-emerald-500 border border-accent-emerald-500/20' : 'bg-background hover:bg-card-border text-foreground border border-card-border shadow-sm'}`}
                         >
                           {msg.mistakeSaved ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
                           {msg.mistakeSaved ? 'Saved to Mistake Book' : 'Save to Mistake Book'}
@@ -345,22 +351,17 @@ export default function TutorPage() {
                   <div className="whitespace-pre-wrap">{msg.content}</div>
                 )}
               </div>
-              {msg.role === 'user' && (
-                <div className="w-8 h-8 rounded-full bg-stone-200 dark:bg-stone-700 flex items-center justify-center shrink-0">
-                  <User className="w-5 h-5 text-stone-500 dark:text-stone-400" />
-                </div>
-              )}
             </div>
           ))}
           
           {isLoading && (
-            <div className="flex gap-4 justify-start">
-              <div className="w-8 h-8 rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center shrink-0 border border-stone-200 dark:border-stone-700">
-                <Bot className="w-5 h-5 text-stone-600 dark:text-stone-400" />
+            <div className="flex gap-3 justify-start">
+              <div className="w-8 h-8 rounded-full bg-primary-500/10 flex items-center justify-center shrink-0 border border-primary-500/20 mt-1">
+                <Bot className="w-4 h-4 text-primary-500 animate-pulse" />
               </div>
-              <div className="bg-stone-50 dark:bg-stone-800 rounded-2xl rounded-bl-sm px-5 py-4 flex items-center gap-3 border border-stone-100 dark:border-stone-700 shadow-sm">
-                <Loader2 className="w-4 h-4 text-stone-400 animate-spin" />
-                <span className="text-sm text-stone-500 dark:text-stone-400 font-medium">
+              <div className="bg-background rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-3 border border-card-border shadow-sm">
+                <Loader2 className="w-4 h-4 text-primary-500 animate-spin" />
+                <span className="text-sm text-foreground/60 font-medium">
                   {messages[messages.length - 1]?.images?.length || messages[messages.length - 1]?.imageContext ? 'Analyzing image...' : 'Thinking...'}
                 </span>
               </div>
@@ -368,22 +369,22 @@ export default function TutorPage() {
           )}
 
           {isQuotaExhausted ? (
-            <div className="flex gap-4 justify-start">
-               <div className="w-8 h-8 rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center shrink-0 border border-stone-200 dark:border-stone-700">
-                  <Bot className="w-5 h-5 text-stone-600 dark:text-stone-400" />
+            <div className="flex gap-3 justify-start">
+               <div className="w-8 h-8 rounded-full bg-primary-500/10 flex items-center justify-center shrink-0 border border-primary-500/20 mt-1">
+                  <Bot className="w-4 h-4 text-primary-500" />
                </div>
-               <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl rounded-bl-sm p-5 shadow-sm max-w-sm">
-                  <div className="flex items-center gap-2 mb-2 text-red-800 dark:text-red-300 font-semibold">
+               <div className="bg-red-500/10 border border-red-500/20 rounded-2xl rounded-bl-sm p-4 shadow-sm max-w-sm">
+                  <div className="flex items-center gap-2 mb-2 text-red-500 font-semibold">
                     <AlertCircle className="w-5 h-5" />
-                    <h3>AI limit reached</h3>
+                    <h3 className="text-sm">AI limit reached</h3>
                   </div>
-                  <p className="text-sm text-red-700 dark:text-red-400/90 leading-relaxed">
+                  <p className="text-xs text-red-400 leading-relaxed">
                     RankUp has reached its current AI usage limit. Please try again later.
                   </p>
                </div>
             </div>
           ) : error ? (
-            <div className="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 p-4 rounded-xl text-sm border border-red-100 dark:border-red-900/50">
+            <div className="flex items-center gap-2 text-red-400 bg-red-500/10 p-3 rounded-xl text-sm border border-red-500/20">
               <AlertCircle className="w-5 h-5 shrink-0" />
               <p>{error}</p>
             </div>
@@ -392,8 +393,8 @@ export default function TutorPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="p-4 bg-white dark:bg-stone-900 border-t border-stone-100 dark:border-stone-800">
-          <div className="flex items-end gap-3 max-w-4xl mx-auto">
+        <div className="p-3 bg-background border-t border-card-border">
+          <div className="flex items-end gap-2 max-w-4xl mx-auto">
             <input 
               type="file" 
               accept="image/jpeg, image/png, image/webp" 
@@ -404,67 +405,56 @@ export default function TutorPage() {
             />
             <button 
               onClick={() => fileInputRef.current?.click()}
-              className="p-3.5 text-stone-400 hover:text-teal-600 hover:bg-stone-50 dark:hover:bg-stone-800 rounded-xl transition-colors shrink-0 flex flex-col items-center justify-center"
+              className="p-3 text-foreground/40 hover:text-primary-500 hover:bg-primary-500/10 rounded-xl transition-colors shrink-0 flex items-center justify-center tap-scale h-[48px]"
               title="Add photos"
             >
-              <ImageIcon className="w-6 h-6 mb-0.5" />
-              <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Photos</span>
+              <ImageIcon className="w-6 h-6" />
             </button>
             <div className="flex-1 relative flex flex-col">
               {isCompressing ? (
-                <div className="relative inline-flex mb-3 self-start px-3 py-2 bg-stone-50 dark:bg-stone-800 rounded-lg border border-stone-200 dark:border-stone-700 items-center gap-2">
-                  <Loader2 className="w-4 h-4 text-stone-400 animate-spin" />
-                  <span className="text-xs text-stone-500 font-medium">Optimizing images...</span>
+                <div className="relative inline-flex mb-2 self-start px-3 py-1.5 bg-card-bg rounded-lg border border-card-border items-center gap-2">
+                  <Loader2 className="w-3 h-3 text-primary-500 animate-spin" />
+                  <span className="text-xs text-foreground/60 font-medium">Optimizing...</span>
                 </div>
               ) : selectedImages.length > 0 ? (
-                <div className="flex gap-3 mb-3 self-start overflow-x-auto max-w-full pb-2 scrollbar-thin scrollbar-thumb-stone-200 dark:scrollbar-thumb-stone-700 w-full pr-14">
+                <div className="flex gap-2 mb-2 self-start overflow-x-auto max-w-full pb-1 scrollbar-thin w-full pr-14">
                   {selectedImages.map((img, idx) => (
-                    <div key={img.id} className="relative shrink-0 p-2 bg-stone-50 dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 shadow-sm">
-                      <div className="absolute top-1 left-1 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md z-10 backdrop-blur-sm">
+                    <div key={img.id} className="relative shrink-0 p-1.5 bg-card-bg rounded-xl border border-card-border shadow-sm">
+                      <div className="absolute top-0.5 left-0.5 bg-black/60 text-white text-[9px] font-bold px-1 py-0.5 rounded z-10 backdrop-blur-sm">
                         {idx + 1}
                       </div>
-                      <img src={`data:${img.mimeType};base64,${img.base64}`} alt={`Preview ${idx + 1}`} className="h-16 w-auto rounded-lg object-contain" />
+                      <img src={`data:${img.mimeType};base64,${img.base64}`} alt={`Preview ${idx + 1}`} className="h-12 w-auto rounded-md object-contain" />
                       <button 
                         onClick={() => removeImage(img.id)} 
-                        className="absolute -top-2 -right-2 bg-stone-900 dark:bg-stone-700 hover:bg-red-500 text-white rounded-full p-1 shadow-sm transition-colors z-10"
+                        className="absolute -top-1.5 -right-1.5 bg-background border border-card-border hover:bg-red-500 hover:border-red-500 hover:text-white text-foreground/60 rounded-full p-1 shadow-sm transition-colors z-10 tap-scale"
                         title="Remove image"
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
                   ))}
-                  {selectedImages.length < MAX_IMAGES_PER_MESSAGE && (
-                    <button 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="shrink-0 h-[84px] w-[84px] flex flex-col items-center justify-center gap-1 bg-stone-50 dark:bg-stone-800/50 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl border border-dashed border-stone-300 dark:border-stone-700 transition-colors text-stone-500 dark:text-stone-400"
-                    >
-                       <span className="text-xl leading-none">+</span>
-                       <span className="text-xs font-medium uppercase tracking-wider">Add</span>
-                    </button>
-                  )}
                 </div>
               ) : null}
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={isQuotaExhausted}
-                placeholder={isQuotaExhausted ? "AI limit reached. Please try later." : "Message RankUp Tutor..."}
-                className="w-full bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-2xl px-4 py-3.5 pr-14 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none resize-none overflow-hidden text-stone-900 dark:text-white transition-shadow disabled:opacity-60 disabled:cursor-not-allowed"
-                rows={1}
-                style={{ minHeight: '52px', maxHeight: '120px' }}
-              />
-              <button
-                onClick={handleSend}
-                disabled={isQuotaExhausted || (!input.trim() && selectedImages.length === 0) || isLoading || isCompressing}
-                className="absolute right-2 bottom-2 p-2 bg-teal-600 text-white rounded-xl hover:bg-teal-700 disabled:opacity-50 disabled:hover:bg-teal-600 transition-all shadow-sm"
-              >
-                <Send className="w-5 h-5" />
-              </button>
+              <div className="relative flex items-center">
+                <textarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={isQuotaExhausted}
+                  placeholder={isQuotaExhausted ? "Limit reached." : "Ask anything..."}
+                  className="w-full bg-card-bg border border-card-border rounded-xl px-4 py-3 pr-12 focus:ring-1 focus:ring-primary-500 focus:border-primary-500 outline-none resize-none overflow-hidden text-foreground transition-shadow disabled:opacity-60 disabled:cursor-not-allowed text-sm"
+                  rows={1}
+                  style={{ minHeight: '48px', maxHeight: '120px' }}
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={isQuotaExhausted || (!input.trim() && selectedImages.length === 0) || isLoading || isCompressing}
+                  className="absolute right-1.5 bottom-1.5 p-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:hover:bg-primary-600 transition-all shadow-sm tap-scale"
+                >
+                  <Send className="w-4 h-4 text-white ml-0.5" />
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="text-center mt-3">
-            <span className="text-[11px] text-stone-400 font-medium">RankUp AI can make mistakes. Verify important facts.</span>
           </div>
         </div>
       </div>
