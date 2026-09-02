@@ -212,7 +212,12 @@ ${JSON.stringify(wrongAnswersToAnalyze.map(q => ({ id: q.id, question: q.questio
              question_id: eq.id || null,
              chapter: eq.chapter,
              topic: eq.topic,
-             is_correct: eq.isCorrect
+             is_correct: eq.isCorrect,
+             question_text: eq.question,
+             options: eq.options || null,
+             student_answer: eq.studentAnswer,
+             correct_answer: eq.correctAnswer,
+             explanation: eq.explanation
            }));
            await serverSupabase.from('test_attempt_questions').insert(questionsToInsert);
         }

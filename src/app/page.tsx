@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MessageSquare, Camera, PenTool, FileCheck, BrainCircuit, Activity, BookMarked, AlertCircle, Clock, ArrowRight, Flame, Trophy, PlayCircle } from "lucide-react";
+import { MessageSquare, Camera, PenTool, FileCheck, BrainCircuit, Activity, BookMarked, AlertCircle, Clock, ArrowRight, Flame, Trophy, PlayCircle, CheckCircle } from "lucide-react";
 import { createClient } from '@/utils/supabase/server';
 import { ActionCard } from "@/components/ui/ActionCard";
 import { MetricCard } from "@/components/ui/MetricCard";
@@ -15,6 +15,7 @@ export default async function Home() {
   let testStats = { completed: 0, accuracy: 0 };
   let evalStats = { completed: 0 };
   let mistakeStats = { needsReview: 0, repeated: 0, weakestTopic: 'None' };
+  let totalQuestionsPracticed = 0;
   
   // Fake streak/xp for UI demonstration as requested ("use real values, if no data use empty states")
   // Since we don't have streak/xp in schema, we will mock it based on activity length or just show empty.
@@ -25,29 +26,81 @@ export default async function Home() {
   if (user) {
     const { data: activity } = await supabase
       .from('student_activity')
-      .select('event_type, chapter, topic, created_at')
+      .select('event_type, chapter, topic, created_at, metadata_json')
       .eq('user_id', user.id)
+      .in('event_type', ['tutor_question', 'image_question'])
       .order('created_at', { ascending: false })
       .limit(3);
     
-    recentActivity = activity || [];
-    
     // Calculate naive streak based on recent activity just to show something, or 0
-    if (recentActivity.length > 0) {
+    if (activity && activity.length > 0) {
        streak = 1; // Real implementation would check consecutive days
-       xp = recentActivity.length * 50; 
+       xp = activity.length * 50; 
     }
 
     const { data: attempts } = await supabase
       .from('test_attempts')
+      .select('id, title, total_questions, correct_answers, subject, completed_at')
+      .eq('user_id', user.id)
+      .order('completed_at', { ascending: false })
+      .limit(3);
+
+    const { data: evaluations } = await supabase
+      .from('answer_evaluations')
+      .select('id, estimated_marks, total_marks, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    const { data: mistakesDataForHistory } = await supabase
+      .from('mistake_book')
+      .select('id, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    // Merge for recent activity
+    let mergedHistory: any[] = [];
+    if (activity) {
+      activity.forEach(a => mergedHistory.push({
+        type: a.event_type === 'image_question' ? 'upload' : 'doubt',
+        title: a.event_type === 'image_question' ? 'Uploaded Question' : 'Asked a doubt',
+        date: a.created_at,
+        score: null,
+      }));
+    }
+    if (attempts) {
+      attempts.forEach(a => mergedHistory.push({
+        type: 'test',
+        title: a.title || 'Science Test',
+        date: a.completed_at,
+        score: `${a.correct_answers}/${a.total_questions}`,
+      }));
+    }
+    if (evaluations) {
+      evaluations.forEach(e => mergedHistory.push({
+        type: 'evaluation',
+        title: 'Answer evaluation',
+        date: e.created_at,
+        score: `${e.estimated_marks}/${e.total_marks}`,
+      }));
+    }
+    
+    mergedHistory.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    recentActivity = mergedHistory.slice(0, 3);
+
+
+    const { data: allAttempts } = await supabase
+      .from('test_attempts')
       .select('total_questions, correct_answers')
       .eq('user_id', user.id);
 
-    if (attempts && attempts.length > 0) {
-      testStats.completed = attempts.length;
-      const totalQ = attempts.reduce((acc, curr) => acc + curr.total_questions, 0);
-      const correctQ = attempts.reduce((acc, curr) => acc + curr.correct_answers, 0);
+    if (allAttempts && allAttempts.length > 0) {
+      testStats.completed = allAttempts.length;
+      const totalQ = allAttempts.reduce((acc, curr) => acc + (curr.total_questions || 0), 0);
+      const correctQ = allAttempts.reduce((acc, curr) => acc + (curr.correct_answers || 0), 0);
       testStats.accuracy = totalQ > 0 ? Math.round((correctQ / totalQ) * 100) : 0;
+      totalQuestionsPracticed = totalQ;
     }
 
     const { count: evalCount } = await supabase
@@ -84,7 +137,7 @@ export default async function Home() {
     return 'Good evening';
   };
 
-  const totalQuestions = testStats.completed * 10; // rough estimate if no explicit data
+  // The totalQuestionsPracticed is scoped inside the user block, so we'll declare it above and assign it.
 
   return (
     <div className="flex flex-col flex-1 p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto w-full space-y-8 mt-2 sm:mt-8 mb-8">
@@ -157,7 +210,7 @@ export default async function Home() {
           />
           <MetricCard 
             label="Questions" 
-            value={testStats.completed > 0 ? totalQuestions : 0} 
+            value={totalQuestionsPracticed} 
             icon={<Activity className="w-4 h-4 text-accent-teal-500" />} 
           />
           <MetricCard 
@@ -169,51 +222,49 @@ export default async function Home() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Continue Learning */}
+        {/* Recent Activity */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-foreground font-outfit">Continue Learning</h2>
-            <Link href="/progress" className="text-sm font-medium text-primary-500 hover:text-primary-400 flex items-center gap-1">
-              View all <ArrowRight className="w-4 h-4" />
+            <h2 className="text-lg font-bold text-foreground font-outfit">Recent Activity</h2>
+            <Link href="/history" className="text-sm font-medium text-primary-500 hover:text-primary-400 flex items-center gap-1">
+              View All <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
           
-          <div className="bg-card-bg border border-card-border rounded-2xl p-5">
+          <div className="bg-card-bg border border-card-border rounded-2xl overflow-hidden">
             {recentActivity.length > 0 ? (
-              <div className="space-y-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-bold text-lg text-foreground">
-                      {recentActivity[0].chapter || 'General Practice'}
-                    </h3>
-                    <p className="text-sm text-foreground/60 mt-1">
-                      {recentActivity[0].topic || (recentActivity[0].event_type === 'answer_evaluation' ? 'Answer Evaluation' : 'Topic Review')}
-                    </p>
-                  </div>
-                  <div className="w-10 h-10 rounded-full bg-primary-500/10 flex items-center justify-center">
-                    <PlayCircle className="w-5 h-5 text-primary-500 ml-0.5" />
-                  </div>
-                </div>
-                
-                <div>
-                  <div className="flex justify-between text-xs font-medium text-foreground/60 mb-2">
-                    <span>Progress</span>
-                    <span>60%</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-background rounded-full overflow-hidden">
-                    <div className="h-full bg-primary-500 rounded-full w-[60%]" />
-                  </div>
-                </div>
-                
-                <Link href={recentActivity[0].event_type === 'answer_evaluation' ? '/answer-evaluation' : '/custom-test'} className="inline-flex items-center justify-center w-full sm:w-auto px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-xl transition-colors tap-scale">
-                  Continue &rarr;
-                </Link>
+              <div className="divide-y divide-card-border">
+                {recentActivity.map((item, i) => {
+                  const isToday = new Date(item.date).toDateString() === new Date().toDateString();
+                  let Icon = MessageSquare;
+                  let color = "text-blue-500";
+                  let bg = "bg-blue-500/10";
+                  
+                  if (item.type === 'test') { Icon = PenTool; color = "text-orange-500"; bg = "bg-orange-500/10"; }
+                  else if (item.type === 'evaluation') { Icon = CheckCircle; color = "text-teal-500"; bg = "bg-teal-500/10"; }
+                  else if (item.type === 'upload') { Icon = Camera; color = "text-cyan-500"; bg = "bg-cyan-500/10"; }
+                  
+                  return (
+                    <div key={i} className="p-4 flex items-center justify-between hover:bg-foreground/5 transition-colors">
+                      <div className="flex items-center gap-3">
+                         <div className={`p-2 rounded-lg ${bg} ${color}`}>
+                           <Icon className="w-4 h-4" />
+                         </div>
+                         <div className="font-medium text-sm text-foreground">{item.title}</div>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs font-medium text-foreground/60">
+                         {item.score && <span className="bg-foreground/5 px-2 py-1 rounded text-foreground">{item.score}</span>}
+                         <span>{isToday ? 'Today' : new Date(item.date).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             ) : (
               <div className="text-center py-8">
-                <p className="text-foreground/60 mb-4">Start your first lesson.</p>
+                <p className="text-foreground/60 mb-4">No recent activity.</p>
                 <Link href="/tutor" className="inline-flex items-center justify-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-xl transition-colors tap-scale">
-                  Chat with Tutor
+                  Start Learning
                 </Link>
               </div>
             )}

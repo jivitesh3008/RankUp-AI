@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import AuthPrompt from '@/components/AuthPrompt';
-import { Download, Trash2, Shield, Loader2, AlertTriangle, User as UserIcon } from 'lucide-react';
+import { Download, Trash2, Shield, Loader2, AlertTriangle, User as UserIcon, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 
@@ -117,6 +117,24 @@ export default function SettingsPage() {
               <p className="text-lg font-medium text-foreground">{user.email}</p>
             </div>
           </div>
+        </section>
+
+        {/* History Section */}
+        <section className="bg-card-bg border border-card-border rounded-3xl p-6 shadow-sm">
+          <div className="flex items-center gap-3 mb-4 pb-4 border-b border-card-border">
+            <BookOpen className="w-6 h-6 text-primary-500" />
+            <h2 className="text-xl font-bold font-outfit text-foreground">Learning History</h2>
+          </div>
+          <p className="text-sm text-foreground/60 mb-6">
+            View all your past activities, including tutor doubts, practice tests, and evaluated answers.
+          </p>
+          <Link 
+            href="/history"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-bold transition-colors shadow-sm tap-scale"
+          >
+            <BookOpen className="w-4 h-4" />
+            View History
+          </Link>
         </section>
 
         {/* Privacy & Data Section */}

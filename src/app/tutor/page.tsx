@@ -37,6 +37,7 @@ export default function TutorPage() {
   const [error, setError] = useState<string | null>(null);
   const [isQuotaExhausted, setIsQuotaExhausted] = useState(false);
   const [subject, setSubject] = useState('Science');
+  const [conversationId, setConversationId] = useState<string | null>(null);
   
   const [isCompressing, setIsCompressing] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
@@ -111,6 +112,27 @@ export default function TutorPage() {
       const supabase = createClient();
       const { data } = await supabase.auth.getUser();
       setUser(data.user);
+      
+      if (data.user && typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const convId = params.get('conversation');
+        if (convId) {
+          setConversationId(convId);
+          const { data: pastMsgs } = await supabase
+            .from('tutor_messages')
+            .select('*')
+            .eq('conversation_id', convId)
+            .order('created_at', { ascending: true });
+            
+          if (pastMsgs && pastMsgs.length > 0) {
+            setMessages(pastMsgs.map(m => ({
+              id: m.id,
+              role: m.role === 'model' ? 'assistant' : 'user',
+              content: m.content
+            })));
+          }
+        }
+      }
     };
     checkUser();
 
@@ -154,10 +176,10 @@ export default function TutorPage() {
         },
         body: JSON.stringify({
           subject,
+          conversationId,
           messages: [...messages, userMessage].map(m => ({ 
-            role: m.role, 
+            role: m.role === 'assistant' ? 'model' : m.role, 
             content: m.content,
-            // Only send raw base64 images for the NEW message to save history payload limits
             ...(m.id === userMessage.id && m.images ? { images: m.images } : {}),
             imageContext: m.imageContext
           })),
@@ -175,6 +197,11 @@ export default function TutorPage() {
       
       if (data.imageContext) {
         setMessages((prev) => prev.map(m => m.id === userMessage.id ? { ...m, imageContext: data.imageContext } : m));
+      }
+      
+      if (data.conversationId) {
+        setConversationId(data.conversationId);
+        window.history.replaceState({}, document.title, `${window.location.pathname}?conversation=${data.conversationId}`);
       }
       
       const assistantMessage: Message = {
@@ -234,6 +261,8 @@ export default function TutorPage() {
         content: "Hello! I'm RankUp Tutor. What are you stuck on today?",
       }
     ]);
+    setConversationId(null);
+    window.history.replaceState({}, document.title, window.location.pathname);
     setError(null);
   };
 

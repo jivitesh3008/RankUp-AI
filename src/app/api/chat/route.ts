@@ -59,7 +59,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Payload too large. Max allowed size is 5MB.' }, { status: 413 });
     }
 
-    const { messages, subject } = JSON.parse(bodyText);
+    const { messages, subject, conversationId } = JSON.parse(bodyText);
 
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: 'Invalid messages format' }, { status: 400 });
@@ -368,7 +368,7 @@ INSTRUCTIONS:
       replyText = replyText.replace(misconceptionMatch[0], '').trim();
     }
 
-    const finalResponseData = { 
+    let finalResponseData: any = { 
       response: replyText,
       grounding: groundingData,
       ...(newlyExtractedImageContext ? { imageContext: newlyExtractedImageContext } : {}),
@@ -377,11 +377,32 @@ INSTRUCTIONS:
     
     if (user && lastUserMessage) {
       try {
-        await supabase.from('student_activity').insert({
+        let currentConvId = conversationId;
+        if (!currentConvId) {
+           const title = (lastUserMessage.content || 'Image Query').substring(0, 50);
+           const { data: conv } = await serverSupabase.from('tutor_conversations').insert({
+              user_id: user.id,
+              title: title,
+              subject: subject || groundingData.chapter || 'Science'
+           }).select().single();
+           if (conv) currentConvId = conv.id;
+        } else {
+           await serverSupabase.from('tutor_conversations').update({ updated_at: new Date().toISOString() }).eq('id', currentConvId);
+        }
+
+        if (currentConvId) {
+           await serverSupabase.from('tutor_messages').insert([
+             { conversation_id: currentConvId, user_id: user.id, role: 'user', content: lastUserMessage.content || '[Image Query]' },
+             { conversation_id: currentConvId, user_id: user.id, role: 'model', content: replyText }
+           ]);
+           finalResponseData.conversationId = currentConvId;
+        }
+
+        await serverSupabase.from('student_activity').insert({
           user_id: user.id,
           event_type: (lastUserMessage.images && lastUserMessage.images.length > 0) ? 'image_question' : 'tutor_question',
           chapter: groundingData.chapter || null,
-          metadata_json: { query: (lastUserMessage.content || '').substring(0, 100) }
+          metadata_json: { query: (lastUserMessage.content || '').substring(0, 100), conversation_id: currentConvId }
         });
       } catch (err) {
         console.error('Failed to log activity', err);

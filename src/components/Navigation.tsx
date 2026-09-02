@@ -46,6 +46,7 @@ export default function Navigation() {
     { name: 'Check Answer', href: '/answer-evaluation' },
     { name: 'Mistakes', href: '/mistake-book' },
     { name: 'Progress', href: '/progress' },
+    { name: 'History', href: '/history' },
   ];
 
     return (
