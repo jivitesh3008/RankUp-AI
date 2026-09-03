@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, MessageSquare, PenTool, Activity, User } from 'lucide-react';
+import { Home, MessageSquare, PenTool, Activity, User, BookOpen } from 'lucide-react';
 
 export function MobileBottomNav() {
   const pathname = usePathname();
@@ -12,6 +12,7 @@ export function MobileBottomNav() {
     { name: 'Tutor', href: '/tutor', icon: MessageSquare },
     { name: 'Tests', href: '/custom-test', icon: PenTool },
     { name: 'Progress', href: '/progress', icon: Activity },
+    { name: 'Notes', href: '/notes', icon: BookOpen },
     { name: 'Profile', href: '/settings', icon: User },
   ];
 

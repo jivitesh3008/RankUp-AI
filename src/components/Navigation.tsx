@@ -45,6 +45,8 @@ export default function Navigation() {
     { name: 'Tests', href: '/custom-test' },
     { name: 'Check Answer', href: '/answer-evaluation' },
     { name: 'Mistakes', href: '/mistake-book' },
+    { name: 'Short Notes', href: '/notes' },
+    { name: 'Saved', href: '/saved' },
     { name: 'Progress', href: '/progress' },
     { name: 'History', href: '/history' },
   ];

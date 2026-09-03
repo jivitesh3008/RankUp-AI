@@ -17,10 +17,11 @@ export async function GET(req: Request) {
 
     // Fetch from all sources in parallel
     const [
-      { data: activities, error: errActivities },
-      { data: tests, error: errTests },
-      { data: evaluations, error: errEvaluations },
-      { data: mistakes, error: errMistakes }
+      { data: conversations, error: errConversations },
+      { data: oldActivities, error: errActivities },
+      { data: testsData, error: errTests },
+      { data: evaluationsData, error: errEvaluations },
+      { data: mistakesData, error: errMistakes }
     ] = await Promise.all([
       supabase
         .from('tutor_conversations')
@@ -55,17 +56,6 @@ export async function GET(req: Request) {
         .limit(limit)
     ]);
 
-    const conversations = activities;
-    const oldActivities = tests; 
-    const testsData = evaluations;
-    const evaluationsData = mistakes;
-    const { data: mistakesData, error: errMistakes2 } = await supabase
-        .from('mistake_book')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(limit);
-
     let historyItems: any[] = [];
 
     // Map tutor_conversations
@@ -89,11 +79,19 @@ export async function GET(req: Request) {
       oldActivities.forEach((activity: any) => {
         if (activity.metadata_json?.conversation_id) return; // Skip if it's already in conversations
         const isUpload = activity.event_type === 'image_question';
-        const query = activity.metadata_json?.query || 'Unknown question';
+        
+        let query = activity.metadata_json?.query || 'Unknown question';
+
+        let type = 'doubt';
+        if (isUpload) type = 'upload';
+        
+        let title = 'Tutor Doubt';
+        if (isUpload) title = 'Uploaded Question';
+
         historyItems.push({
           id: activity.id,
-          type: isUpload ? 'upload' : 'doubt',
-          title: isUpload ? 'Uploaded Question' : 'Tutor Doubt',
+          type: type,
+          title: title,
           description: query,
           chapter: activity.chapter,
           subject: 'Science',

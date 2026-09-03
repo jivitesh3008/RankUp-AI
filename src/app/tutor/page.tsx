@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
-import { Send, Image as ImageIcon, Trash2, Bot, User, AlertCircle, Loader2, CheckCircle2, Bookmark } from 'lucide-react';
+import { Send, Image as ImageIcon, Trash2, Bot, User, AlertCircle, Loader2, CheckCircle2, Bookmark, ThumbsUp, ThumbsDown, MessageSquareWarning } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -17,6 +17,8 @@ type Message = {
   imageContext?: any;
   misconception?: string;
   mistakeSaved?: boolean;
+  bookmarkSaved?: boolean;
+  feedbackGiven?: 'helpful' | 'unhelpful' | 'report';
 };
 
 const MAX_IMAGES_PER_MESSAGE = 10;
@@ -253,6 +255,47 @@ export default function TutorPage() {
     }
   };
 
+  const handleSaveBookmark = async (msgId: string, content: string) => {
+    try {
+      const response = await fetch('/api/bookmarks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          item_type: 'tutor_response',
+          item_id: conversationId || msgId,
+          title: `Tutor response on ${subject}`,
+          preview: content.substring(0, 100) + '...',
+          subject: subject,
+          chapter: 'Tutor Chat'
+        })
+      });
+      if (response.ok) {
+        setMessages(prev => prev.map(m => m.id === msgId ? { ...m, bookmarkSaved: true } : m));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleFeedback = async (msgId: string, rating: 'helpful' | 'unhelpful' | 'report') => {
+    try {
+      const response = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content_type: 'tutor_response',
+          content_id: msgId,
+          rating
+        })
+      });
+      if (response.ok) {
+        setMessages(prev => prev.map(m => m.id === msgId ? { ...m, feedbackGiven: rating } : m));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const clearChat = () => {
     setMessages([
       {
@@ -371,10 +414,46 @@ export default function TutorPage() {
                           className={`text-xs font-medium px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors tap-scale ${msg.mistakeSaved ? 'bg-accent-emerald-500/10 text-accent-emerald-500 border border-accent-emerald-500/20' : 'bg-background hover:bg-card-border text-foreground border border-card-border shadow-sm'}`}
                         >
                           {msg.mistakeSaved ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
-                          {msg.mistakeSaved ? 'Saved to Mistake Book' : 'Save to Mistake Book'}
+                          {msg.mistakeSaved ? 'Saved to Mistake Book' : 'Save Mistake'}
                         </button>
                       </div>
                     )}
+                    <div className="mt-2 pt-2 border-t border-card-border/50 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleFeedback(msg.id, 'helpful')}
+                          disabled={!!msg.feedbackGiven}
+                          className={`p-1.5 rounded-md transition-colors ${msg.feedbackGiven === 'helpful' ? 'text-primary-600 bg-primary-600/10' : 'text-foreground/40 hover:text-primary-600 hover:bg-primary-600/10'}`}
+                          title="Helpful"
+                        >
+                          <ThumbsUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleFeedback(msg.id, 'unhelpful')}
+                          disabled={!!msg.feedbackGiven}
+                          className={`p-1.5 rounded-md transition-colors ${msg.feedbackGiven === 'unhelpful' ? 'text-orange-500 bg-orange-500/10' : 'text-foreground/40 hover:text-orange-500 hover:bg-orange-500/10'}`}
+                          title="Not helpful"
+                        >
+                          <ThumbsDown className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleFeedback(msg.id, 'report')}
+                          disabled={!!msg.feedbackGiven}
+                          className={`p-1.5 rounded-md transition-colors ${msg.feedbackGiven === 'report' ? 'text-red-500 bg-red-500/10' : 'text-foreground/40 hover:text-red-500 hover:bg-red-500/10'}`}
+                          title="Report problem"
+                        >
+                          <MessageSquareWarning className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => handleSaveBookmark(msg.id, msg.content)}
+                        disabled={msg.bookmarkSaved}
+                        className={`text-xs font-medium px-2.5 py-1 rounded-md flex items-center gap-1.5 transition-colors ${msg.bookmarkSaved ? 'text-teal-600 bg-teal-600/10' : 'text-foreground/50 hover:text-foreground hover:bg-card-border'}`}
+                      >
+                        {msg.bookmarkSaved ? <CheckCircle2 className="w-3 h-3" /> : <Bookmark className="w-3 h-3" />}
+                        {msg.bookmarkSaved ? 'Saved' : 'Bookmark'}
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="whitespace-pre-wrap">{msg.content}</div>

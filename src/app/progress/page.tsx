@@ -3,6 +3,7 @@ import AuthPrompt from '@/components/AuthPrompt';
 import { Activity, BookOpen, BrainCircuit, CheckCircle2, Clock, FileCheck, Target, TrendingUp, BookMarked } from 'lucide-react';
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
+import { getProgressStats } from '@/lib/progress';
 
 export default async function ProgressPage() {
   const supabase = await createClient();
@@ -12,7 +13,9 @@ export default async function ProgressPage() {
     return <AuthPrompt />;
   }
 
-  // Fetch basic stats
+  const stats = await getProgressStats(user.id);
+
+  // Fetch basic stats for list views
   const { data: attempts } = await supabase
     .from('test_attempts')
     .select('id, test_type, title, subject, total_questions, correct_answers, score_percentage, completed_at')
@@ -32,43 +35,13 @@ export default async function ProgressPage() {
     .order('created_at', { ascending: false })
     .limit(5);
 
-  const testsCompleted = attempts?.length || 0;
-  const questionsPracticed = attempts?.reduce((acc, curr) => acc + curr.total_questions, 0) || 0;
-  const correctQuestions = attempts?.reduce((acc, curr) => acc + curr.correct_answers, 0) || 0;
-  const overallAccuracy = questionsPracticed > 0 ? Math.round((correctQuestions / questionsPracticed) * 100) : 0;
-  const evaluationsCompleted = evaluations?.length || 0;
-
-  const { data: mistakesData } = await supabase
-    .from('mistake_book')
-    .select('status, mistake_category, topic, occurrence_count')
+  const { count: notesCountResult } = await supabase
+    .from('short_notes')
+    .select('*', { count: 'exact', head: true })
     .eq('user_id', user.id);
+  const notesCount = notesCountResult || 0;
 
-  let mistakesRecorded = 0;
-  let mistakesFixed = 0;
-  let mostCommonCategory = 'None';
-  let weakestTopic = 'None';
-  
-  if (mistakesData) {
-     mistakesRecorded = mistakesData.length;
-     mistakesFixed = mistakesData.filter((m: any) => m.status === 'fixed').length;
-     
-     const categoryCounts = mistakesData.reduce((acc: any, m: any) => {
-       if (m.mistake_category) acc[m.mistake_category] = (acc[m.mistake_category] || 0) + m.occurrence_count;
-       return acc;
-     }, {});
-     mostCommonCategory = Object.keys(categoryCounts).sort((a, b) => categoryCounts[b] - categoryCounts[a])[0] || 'None';
-
-     const repeated = mistakesData.filter((m: any) => m.occurrence_count > 1);
-     if (repeated.length > 0) {
-       const topicCounts = repeated.reduce((acc: any, m: any) => {
-         acc[m.topic] = (acc[m.topic] || 0) + m.occurrence_count;
-         return acc;
-       }, {});
-       weakestTopic = Object.keys(topicCounts).sort((a, b) => topicCounts[b] - topicCounts[a])[0] || 'None';
-     }
-  }
-
-  // Chapter Performance (mocked aggregation for now, could be done via RPC)
+  // Chapter Performance
   const chapterStats: Record<string, { total: number, correct: number }> = {};
   
   if (attempts) {
@@ -90,7 +63,7 @@ export default async function ProgressPage() {
          <p className="text-foreground/60 -mt-2 ml-[3.25rem]">Welcome back. Here's a snapshot of your learning journey.</p>
       </div>
       
-      {testsCompleted === 0 && evaluationsCompleted === 0 && (!activity || activity.length === 0) ? (
+      {stats.testsCompleted === 0 && stats.evaluationsCompleted === 0 && (!activity || activity.length === 0) ? (
         <div className="bg-stone-50 dark:bg-stone-800/30 p-8 md:p-12 rounded-3xl border border-dashed border-stone-300 dark:border-stone-700 text-center flex flex-col items-center justify-center min-h-[400px]">
           <Activity className="w-12 h-12 text-stone-300 dark:text-stone-600 mb-4" />
           <h3 className="text-lg font-medium font-outfit text-stone-700 dark:text-stone-300 mb-2">Want feedback on your written answers?</h3>
@@ -104,34 +77,41 @@ export default async function ProgressPage() {
       ) : (
         <div className="space-y-12">
           
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-6 sm:gap-8">
             <div>
               <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400 mb-2">
                 <Target className="w-4 h-4" />
                 <span className="text-xs font-semibold uppercase tracking-wider">Accuracy</span>
               </div>
-              <div className="text-4xl font-bold font-outfit text-stone-900 dark:text-stone-100">{overallAccuracy}%</div>
+              <div className="text-4xl font-bold font-outfit text-stone-900 dark:text-stone-100">{stats.accuracy}%</div>
             </div>
             <div>
               <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400 mb-2">
                 <BrainCircuit className="w-4 h-4" />
                 <span className="text-xs font-semibold uppercase tracking-wider">Tests</span>
               </div>
-              <div className="text-4xl font-bold font-outfit text-stone-900 dark:text-stone-100">{testsCompleted}</div>
+              <div className="text-4xl font-bold font-outfit text-stone-900 dark:text-stone-100">{stats.testsCompleted}</div>
             </div>
             <div>
               <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400 mb-2">
                 <BookOpen className="w-4 h-4" />
                 <span className="text-xs font-semibold uppercase tracking-wider">Questions</span>
               </div>
-              <div className="text-4xl font-bold font-outfit text-stone-900 dark:text-stone-100">{questionsPracticed}</div>
+              <div className="text-4xl font-bold font-outfit text-stone-900 dark:text-stone-100">{stats.totalQuestions}</div>
             </div>
             <div>
               <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400 mb-2">
                 <FileCheck className="w-4 h-4" />
                 <span className="text-xs font-semibold uppercase tracking-wider">Evals</span>
               </div>
-              <div className="text-4xl font-bold font-outfit text-stone-900 dark:text-stone-100">{evaluationsCompleted}</div>
+              <div className="text-4xl font-bold font-outfit text-stone-900 dark:text-stone-100">{stats.evaluationsCompleted}</div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400 mb-2">
+                <BookMarked className="w-4 h-4" />
+                <span className="text-xs font-semibold uppercase tracking-wider">Notes</span>
+              </div>
+              <div className="text-4xl font-bold font-outfit text-stone-900 dark:text-stone-100">{notesCount}</div>
             </div>
           </div>
 
@@ -146,20 +126,22 @@ export default async function ProgressPage() {
              
              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                <div>
-                 <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Mistakes Recorded</div>
-                 <div className="text-3xl font-bold font-outfit text-stone-900 dark:text-stone-100">{mistakesRecorded}</div>
+                 <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Needs Review</div>
+                 <div className="text-3xl font-bold font-outfit text-stone-900 dark:text-stone-100">{stats.mistakesNeedsReview}</div>
                </div>
                <div>
                  <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Mistakes Fixed</div>
-                 <div className="text-3xl font-bold font-outfit text-emerald-600 dark:text-emerald-400">{mistakesFixed}</div>
-               </div>
-               <div>
-                 <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Most Common</div>
-                 <div className="text-sm font-semibold text-stone-900 dark:text-stone-100 mt-2 truncate">{mostCommonCategory}</div>
+                 <div className="text-3xl font-bold font-outfit text-emerald-600 dark:text-emerald-400">{stats.mistakesFixed}</div>
                </div>
                <div>
                  <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Weakest Topic</div>
-                 <div className="text-sm font-semibold text-stone-900 dark:text-stone-100 mt-2 truncate">{weakestTopic}</div>
+                 <div className="text-sm font-semibold text-stone-900 dark:text-stone-100 mt-2 truncate">
+                   {stats.weakTopics.length > 0 ? stats.weakTopics[0].topic : 'None'}
+                 </div>
+               </div>
+               <div>
+                 <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Best Streak</div>
+                 <div className="text-3xl font-bold font-outfit text-amber-500">{stats.bestStreak}</div>
                </div>
              </div>
           </div>
@@ -169,8 +151,8 @@ export default async function ProgressPage() {
                <h2 className="text-xl font-bold font-outfit text-stone-900 dark:text-stone-100 mb-6">Chapter Performance</h2>
                {Object.keys(chapterStats).length > 0 ? (
                  <div className="space-y-4">
-                   {Object.entries(chapterStats).map(([ch, stats]) => {
-                     const acc = Math.round((stats.correct / stats.total) * 100);
+                   {Object.entries(chapterStats).map(([ch, st]) => {
+                     const acc = Math.round((st.correct / st.total) * 100);
                      return (
                        <div key={ch} className="group">
                          <div className="flex items-center justify-between mb-1.5">
@@ -206,6 +188,7 @@ export default async function ProgressPage() {
                            {act.event_type === 'custom_test_completed' && 'Completed a Custom Test'}
                            {act.event_type === 'youtube_test_completed' && 'Completed a YouTube Test'}
                            {act.event_type === 'answer_evaluation' && 'Evaluated a handwritten answer'}
+                           {act.event_type === 'quick_revision' && 'Completed a Quick Revision'}
                          </p>
                          <p className="text-xs text-stone-500 mt-1">
                            {new Date(act.created_at).toLocaleDateString()} {act.chapter ? `• ${act.chapter}` : ''}

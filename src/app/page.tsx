@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { MessageSquare, Camera, PenTool, FileCheck, BrainCircuit, Activity, BookMarked, AlertCircle, Clock, ArrowRight, Flame, Trophy, PlayCircle, CheckCircle } from "lucide-react";
+import { MessageSquare, Camera, PenTool, FileCheck, BrainCircuit, Activity, BookMarked, AlertCircle, ArrowRight, Flame, CheckCircle, Zap, BookOpen } from "lucide-react";
 import { createClient } from '@/utils/supabase/server';
 import { ActionCard } from "@/components/ui/ActionCard";
 import { MetricCard } from "@/components/ui/MetricCard";
+import { getProgressStats } from "@/lib/progress";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -10,33 +11,28 @@ export default async function Home() {
 
   const firstName = user?.user_metadata?.full_name?.split(' ')[0] || 'Student';
 
-  // Fetch recent activity for "Continue Learning"
+  // Fetch recent activity
   let recentActivity: any[] = [];
-  let testStats = { completed: 0, accuracy: 0 };
-  let evalStats = { completed: 0 };
-  let mistakeStats = { needsReview: 0, repeated: 0, weakestTopic: 'None' };
-  let totalQuestionsPracticed = 0;
-  
-  // Fake streak/xp for UI demonstration as requested ("use real values, if no data use empty states")
-  // Since we don't have streak/xp in schema, we will mock it based on activity length or just show empty.
-  // The user requested: "Do not fabricate statistics. Use real values. If no data exists, display appropriate zero/empty states."
-  let streak = 0;
-  let xp = 0;
+  let stats = {
+    streak: 0,
+    accuracy: 0,
+    totalQuestions: 0,
+    weakTopics: [] as any[],
+    mistakesNeedsReview: 0,
+    mistakesFixed: 0
+  };
+  let notesCount = 0;
 
   if (user) {
+    stats = await getProgressStats(user.id);
+
     const { data: activity } = await supabase
       .from('student_activity')
       .select('event_type, chapter, topic, created_at, metadata_json')
       .eq('user_id', user.id)
-      .in('event_type', ['tutor_question', 'image_question'])
+      .in('event_type', ['tutor_question', 'image_question', 'quick_revision'])
       .order('created_at', { ascending: false })
       .limit(3);
-    
-    // Calculate naive streak based on recent activity just to show something, or 0
-    if (activity && activity.length > 0) {
-       streak = 1; // Real implementation would check consecutive days
-       xp = activity.length * 50; 
-    }
 
     const { data: attempts } = await supabase
       .from('test_attempts')
@@ -52,27 +48,25 @@ export default async function Home() {
       .order('created_at', { ascending: false })
       .limit(3);
 
-    const { data: mistakesDataForHistory } = await supabase
-      .from('mistake_book')
-      .select('id, created_at')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(3);
-
-    // Merge for recent activity
     let mergedHistory: any[] = [];
     if (activity) {
-      activity.forEach(a => mergedHistory.push({
-        type: a.event_type === 'image_question' ? 'upload' : 'doubt',
-        title: a.event_type === 'image_question' ? 'Uploaded Question' : 'Asked a doubt',
-        date: a.created_at,
-        score: null,
-      }));
+      activity.forEach(a => {
+        let title = 'Asked a doubt';
+        if (a.event_type === 'image_question') title = 'Uploaded Question';
+        if (a.event_type === 'quick_revision') title = 'Quick Revision';
+        
+        mergedHistory.push({
+          type: a.event_type === 'image_question' ? 'upload' : 'doubt',
+          title,
+          date: a.created_at,
+          score: null,
+        });
+      });
     }
     if (attempts) {
       attempts.forEach(a => mergedHistory.push({
         type: 'test',
-        title: a.title || 'Science Test',
+        title: a.title || 'Test',
         date: a.completed_at,
         score: `${a.correct_answers}/${a.total_questions}`,
       }));
@@ -89,45 +83,12 @@ export default async function Home() {
     mergedHistory.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     recentActivity = mergedHistory.slice(0, 3);
 
-
-    const { data: allAttempts } = await supabase
-      .from('test_attempts')
-      .select('total_questions, correct_answers')
-      .eq('user_id', user.id);
-
-    if (allAttempts && allAttempts.length > 0) {
-      testStats.completed = allAttempts.length;
-      const totalQ = allAttempts.reduce((acc, curr) => acc + (curr.total_questions || 0), 0);
-      const correctQ = allAttempts.reduce((acc, curr) => acc + (curr.correct_answers || 0), 0);
-      testStats.accuracy = totalQ > 0 ? Math.round((correctQ / totalQ) * 100) : 0;
-      totalQuestionsPracticed = totalQ;
-    }
-
-    const { count: evalCount } = await supabase
-      .from('answer_evaluations')
+    const { count: nCount } = await supabase
+      .from('short_notes')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id);
       
-    evalStats.completed = evalCount || 0;
-
-    const { data: mistakesData } = await supabase
-      .from('mistake_book')
-      .select('status, topic, occurrence_count')
-      .eq('user_id', user.id);
-      
-    if (mistakesData) {
-       mistakeStats.needsReview = mistakesData.filter((m: any) => m.status === 'new' || m.status === 'reviewed' || m.status === 'practicing').length;
-       const repeated = mistakesData.filter((m: any) => m.occurrence_count > 1);
-       mistakeStats.repeated = repeated.length;
-       
-       if (repeated.length > 0) {
-         const topicCounts = repeated.reduce((acc: any, m: any) => {
-           acc[m.topic] = (acc[m.topic] || 0) + m.occurrence_count;
-           return acc;
-         }, {});
-         mistakeStats.weakestTopic = Object.keys(topicCounts).sort((a, b) => topicCounts[b] - topicCounts[a])[0] || 'None';
-       }
-    }
+    notesCount = nCount || 0;
   }
 
   const getGreeting = () => {
@@ -136,8 +97,6 @@ export default async function Home() {
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
   };
-
-  // The totalQuestionsPracticed is scoped inside the user block, so we'll declare it above and assign it.
 
   return (
     <div className="flex flex-col flex-1 p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto w-full space-y-8 mt-2 sm:mt-8 mb-8">
@@ -151,48 +110,72 @@ export default async function Home() {
           What are you working on today?
         </p>
         
-        {/* Subtle personalized status */}
-        {streak > 0 && (
+        {stats.streak > 0 && (
           <div className="flex items-center gap-4 mt-2 pt-2">
             <div className="flex items-center gap-1.5 text-sm font-medium text-accent-amber-500">
               <Flame className="w-4 h-4 fill-accent-amber-500" />
-              {streak} day streak
+              {stats.streak} day streak
             </div>
           </div>
         )}
       </div>
 
       {/* Primary Actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <ActionCard 
           href="/tutor"
           icon={<MessageSquare className="w-6 h-6" />}
-          title="Ask a Doubt"
-          description="Chat with the AI Tutor"
+          title="Ask Doubt"
+          description="Chat with AI"
           accent="blue"
         />
         <ActionCard 
           href="/upload-question"
           icon={<Camera className="w-6 h-6" />}
-          title="Upload Question"
-          description="Get step-by-step help"
-          accent="teal"
+          title="Upload"
+          description="Get step-by-step"
+          accent="blue"
         />
         <ActionCard 
           href="/custom-test"
           icon={<PenTool className="w-6 h-6" />}
-          title="Create a Test"
-          description="Practice any chapter"
+          title="Test"
+          description="Practice chapters"
           accent="amber"
         />
         <ActionCard 
           href="/answer-evaluation"
           icon={<FileCheck className="w-6 h-6" />}
-          title="Check My Answer"
-          description="Get AI-powered feedback"
+          title="Evaluate"
+          description="Check answers"
           accent="emerald"
         />
+        <ActionCard 
+          href="/notes"
+          icon={<BookOpen className="w-6 h-6" />}
+          title="Short Notes"
+          description="Quick summaries"
+          accent="teal"
+        />
       </div>
+
+      {/* Continue Learning */}
+      {stats.weakTopics.length > 0 && (
+        <div className="bg-primary-500/10 border border-primary-500/20 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <BrainCircuit className="w-5 h-5 text-primary-500" />
+              <h3 className="font-bold font-outfit text-foreground">Continue Learning</h3>
+            </div>
+            <p className="text-sm text-foreground/70">
+              We noticed you've been struggling with <strong className="text-foreground">{stats.weakTopics[0].topic}</strong>. Do a quick revision to strengthen it!
+            </p>
+          </div>
+          <Link href="/notes" className="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-medium transition-colors tap-scale shrink-0 whitespace-nowrap shadow-sm">
+            Read Short Notes
+          </Link>
+        </div>
+      )}
 
       {/* Quick Progress Section */}
       <div>
@@ -200,22 +183,22 @@ export default async function Home() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard 
             label="Day Streak" 
-            value={streak} 
+            value={stats.streak} 
             icon={<Flame className="w-4 h-4 text-accent-amber-500" />} 
           />
           <MetricCard 
             label="Accuracy" 
-            value={`${testStats.accuracy}%`} 
+            value={`${stats.accuracy}%`} 
             icon={<BrainCircuit className="w-4 h-4 text-primary-500" />} 
           />
           <MetricCard 
             label="Questions" 
-            value={totalQuestionsPracticed} 
+            value={stats.totalQuestions} 
             icon={<Activity className="w-4 h-4 text-accent-teal-500" />} 
           />
           <MetricCard 
             label="Mistakes Fixed" 
-            value={mistakeStats.needsReview > 0 ? mistakeStats.repeated : 0} 
+            value={stats.mistakesFixed} 
             icon={<BookMarked className="w-4 h-4 text-accent-emerald-500" />} 
           />
         </div>
@@ -271,28 +254,30 @@ export default async function Home() {
           </div>
         </div>
 
-        {/* Mistake Book Summary */}
+        {/* Right Column: Mistake Book & Short Notes */}
         {user && (
-          <div className="space-y-4">
+          <div className="space-y-8">
+            {/* Mistake Book Summary */}
+            <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-foreground font-outfit">Mistake Book</h2>
             </div>
             
             <div className="bg-card-bg border border-card-border rounded-2xl p-5 h-[calc(100%-2rem)] flex flex-col">
-              {mistakeStats.needsReview > 0 ? (
+              {stats.mistakesNeedsReview > 0 ? (
                 <>
                   <div className="flex-1 flex flex-col items-center justify-center text-center mb-6">
                     <div className="w-16 h-16 bg-accent-amber-500/10 rounded-full flex items-center justify-center mb-4">
                       <AlertCircle className="w-8 h-8 text-accent-amber-500" />
                     </div>
-                    <div className="text-3xl font-bold text-foreground mb-1 font-outfit">{mistakeStats.needsReview}</div>
+                    <div className="text-3xl font-bold text-foreground mb-1 font-outfit">{stats.mistakesNeedsReview}</div>
                     <div className="text-sm text-foreground/60">Concepts to review</div>
                   </div>
                   
-                  {mistakeStats.repeated > 0 && (
+                  {stats.weakTopics.length > 0 && (
                      <div className="p-4 bg-background rounded-xl border border-card-border mb-4">
                        <div className="text-[10px] font-bold text-foreground/50 uppercase tracking-wider mb-1">Needs Practice</div>
-                       <div className="text-sm font-semibold text-foreground truncate">{mistakeStats.weakestTopic}</div>
+                       <div className="text-sm font-semibold text-foreground truncate">{stats.weakTopics[0].topic}</div>
                      </div>
                   )}
                   
@@ -309,6 +294,23 @@ export default async function Home() {
                   <p className="text-sm text-foreground/50">Keep up the great work!</p>
                 </div>
               )}
+            </div>
+            </div>
+
+            {/* Short Notes Summary */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold text-foreground font-outfit">Short Notes</h2>
+              </div>
+              <div className="bg-card-bg border border-card-border rounded-2xl p-5 flex flex-col justify-center items-center text-center">
+                <div className="w-12 h-12 bg-teal-500/10 rounded-full flex items-center justify-center mb-3">
+                  <span className="text-2xl">📖</span>
+                </div>
+                <div className="text-sm text-foreground/60 mb-4">Quick revision before your next test.</div>
+                <Link href="/notes" className="text-sm font-medium text-teal-600 hover:text-teal-700 transition-colors">
+                  Explore Short Notes →
+                </Link>
+              </div>
             </div>
           </div>
         )}
