@@ -4,7 +4,6 @@ import "./globals.css";
 import Navigation from "@/components/Navigation";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import Link from "next/link";
-import OnboardingModal from "@/components/OnboardingModal";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" });
@@ -41,7 +40,6 @@ export default function RootLayout({
           </footer>
         </div>
         <MobileBottomNav />
-        <OnboardingModal />
       </body>
     </html>
   );

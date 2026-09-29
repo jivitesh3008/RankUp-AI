@@ -11,12 +11,9 @@ export async function PATCH(request: Request) {
     }
 
     const body = await request.json();
-    const { primary_subject, learning_goal, onboarding_completed, display_name } = body;
+    const { display_name } = body;
 
     const updates: any = {};
-    if (primary_subject !== undefined) updates.primary_subject = primary_subject;
-    if (learning_goal !== undefined) updates.learning_goal = learning_goal;
-    if (onboarding_completed !== undefined) updates.onboarding_completed = onboarding_completed;
     if (display_name !== undefined) updates.display_name = display_name;
 
     updates.updated_at = new Date().toISOString();
