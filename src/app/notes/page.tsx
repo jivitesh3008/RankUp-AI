@@ -3,10 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { BookOpen, Search, ArrowLeft, Loader2, Zap, AlertCircle, PenTool, CheckCircle, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
+import { MathRenderer } from '@/components/MathRenderer';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
 
 interface ChapterNote {
@@ -109,7 +106,7 @@ export default function ShortNotesPage() {
                       <li key={i} className="flex gap-3">
                         <div className="w-1.5 h-1.5 rounded-full bg-primary-500 mt-2 shrink-0" />
                         <div className="prose prose-base dark:prose-invert max-w-none text-foreground/80 leading-snug [&_.math-display]:overflow-x-auto">
-                           <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{pt}</ReactMarkdown>
+                          <MathRenderer content={pt} />
                         </div>
                       </li>
                     ))}
@@ -125,8 +122,8 @@ export default function ShortNotesPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {selectedNote.important_formulas.map((f, i) => (
                   <div key={i} className="bg-teal-500/5 border border-teal-500/20 rounded-2xl p-5 text-center flex flex-col justify-center">
-                    <div className="prose prose-lg dark:prose-invert max-w-none mb-2 overflow-x-auto text-teal-800 dark:text-teal-200 font-medium">
-                       <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{f.formula}</ReactMarkdown>
+                    <div className="prose prose-lg dark:prose-invert max-w-none mb-2 overflow-x-auto text-teal-800 dark:text-teal-200 font-medium [&_.math-display]:overflow-x-auto [&_.math-display]:overflow-y-hidden [&_.math-display]:scrollbar-thin [&_.math-display]:pb-2">
+                       <MathRenderer content={f.formula} isBlock={true} isPureMath={true} />
                     </div>
                     <p className="text-xs text-foreground/60">{f.explanation}</p>
                   </div>
@@ -141,8 +138,8 @@ export default function ShortNotesPage() {
               <div className="space-y-3">
                 {selectedNote.important_equations.map((e, i) => (
                   <div key={i} className="bg-cyan-500/5 border border-cyan-500/20 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4">
-                    <div className="prose prose-base dark:prose-invert max-w-none flex-1 overflow-x-auto text-cyan-800 dark:text-cyan-200 font-medium whitespace-nowrap">
-                       <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{e.equation}</ReactMarkdown>
+                    <div className="prose prose-base dark:prose-invert max-w-none flex-1 overflow-x-auto text-cyan-800 dark:text-cyan-200 font-medium whitespace-nowrap [&_.math-display]:overflow-x-auto [&_.math-display]:overflow-y-hidden [&_.math-display]:scrollbar-thin [&_.math-display]:pb-2 [&_.math-display]:my-0">
+                       <MathRenderer content={e.equation} isBlock={true} isPureMath={true} />
                     </div>
                     <p className="text-sm text-foreground/60 sm:max-w-[50%]">{e.explanation}</p>
                   </div>
@@ -159,8 +156,8 @@ export default function ShortNotesPage() {
                   {selectedNote.common_mistakes.map((mistake, i) => (
                     <li key={i} className="flex gap-3 text-red-900 dark:text-red-200/90">
                       <AlertCircle className="w-5 h-5 shrink-0 text-red-500/70" />
-                      <div className="prose prose-base dark:prose-invert max-w-none text-sm leading-snug">
-                         <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{mistake}</ReactMarkdown>
+                      <div className="prose prose-base dark:prose-invert max-w-none text-sm leading-snug [&_.math-display]:overflow-x-auto">
+                         <MathRenderer content={mistake} />
                       </div>
                     </li>
                   ))}
@@ -177,8 +174,8 @@ export default function ShortNotesPage() {
                   {selectedNote.exam_tips.map((tip, i) => (
                     <li key={i} className="flex gap-3 text-amber-900 dark:text-amber-200/90">
                       <Zap className="w-5 h-5 shrink-0 text-amber-500/70" />
-                      <div className="prose prose-base dark:prose-invert max-w-none text-sm leading-snug">
-                         <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{tip}</ReactMarkdown>
+                      <div className="prose prose-base dark:prose-invert max-w-none text-sm leading-snug [&_.math-display]:overflow-x-auto">
+                         <MathRenderer content={tip} />
                       </div>
                     </li>
                   ))}
@@ -193,8 +190,8 @@ export default function ShortNotesPage() {
               <ul className="space-y-3 pl-2 border-l-2 border-primary-500/30">
                 {selectedNote.revision_points.map((pt, i) => (
                   <li key={i} className="pl-4">
-                    <div className="prose prose-sm dark:prose-invert max-w-none text-foreground/70 font-medium">
-                       <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{pt}</ReactMarkdown>
+                    <div className="prose prose-sm dark:prose-invert max-w-none text-foreground/70 font-medium [&_.math-display]:overflow-x-auto">
+                       <MathRenderer content={pt} />
                     </div>
                   </li>
                 ))}
