@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { createClient } from '@/utils/supabase/server';
 
 export interface ProgressStats {
@@ -15,14 +16,34 @@ export interface ProgressStats {
 export async function getProgressStats(userId: string): Promise<ProgressStats> {
   const supabase = await createClient();
 
-  // 1. Calculate Streak
-  // We fetch distinct dates from student_activity
-  const { data: activityData } = await supabase
-    .from('student_activity')
-    .select('created_at')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+  // Execute all 4 independent database queries in parallel
+  const [
+    { data: activityData },
+    { data: allAttempts },
+    { count: evalCount },
+    { data: mistakesData }
+  ] = await Promise.all([
+    supabase
+      .from('student_activity')
+      .select('created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(300),
+    supabase
+      .from('test_attempts')
+      .select('total_questions, correct_answers')
+      .eq('user_id', userId),
+    supabase
+      .from('answer_evaluations')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId),
+    supabase
+      .from('mistake_book')
+      .select('status, topic, occurrence_count')
+      .eq('user_id', userId)
+  ]);
 
+  // 1. Calculate Streak
   let streak = 0;
   let bestStreak = 0;
   
@@ -78,11 +99,6 @@ export async function getProgressStats(userId: string): Promise<ProgressStats> {
   }
 
   // 2. Fetch Test Stats
-  const { data: allAttempts } = await supabase
-    .from('test_attempts')
-    .select('total_questions, correct_answers')
-    .eq('user_id', userId);
-
   let testsCompleted = 0;
   let totalQuestions = 0;
   let accuracy = 0;
@@ -94,18 +110,7 @@ export async function getProgressStats(userId: string): Promise<ProgressStats> {
     accuracy = totalQuestions > 0 ? Math.round((correctQ / totalQuestions) * 100) : 0;
   }
 
-  // 3. Evaluations Count
-  const { count: evalCount } = await supabase
-    .from('answer_evaluations')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId);
-
-  // 4. Weak Topics & Mistakes
-  const { data: mistakesData } = await supabase
-    .from('mistake_book')
-    .select('status, topic, occurrence_count')
-    .eq('user_id', userId);
-
+  // 3. Weak Topics & Mistakes
   let mistakesNeedsReview = 0;
   let mistakesFixed = 0;
   const weakTopics: { topic: string; score: number }[] = [];
@@ -140,3 +145,8 @@ export async function getProgressStats(userId: string): Promise<ProgressStats> {
     mistakesFixed
   };
 }
+
+export const getCachedProgressStats = cache(async (userId: string) => {
+  return getProgressStats(userId);
+});
+
