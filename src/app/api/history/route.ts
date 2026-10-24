@@ -104,14 +104,19 @@ export async function GET(req: Request) {
     // Map test_attempts
     if (testsData) {
       testsData.forEach((test: any) => {
+        const isPractice = test.test_type === 'short_answer_practice';
         historyItems.push({
           id: test.id,
           type: 'test',
           title: test.title || 'Practice Test',
-          description: `${test.total_questions} questions`,
+          // Show question count; for practice tests omit score
+          description: isPractice
+            ? `Practice • ${test.total_questions} questions`
+            : `${test.total_questions} questions`,
           subject: test.subject,
-          score: `${test.correct_answers}/${test.total_questions}`,
-          percentage: test.score_percentage,
+          // Only show score for scored (non-practice) tests
+          score: isPractice ? undefined : `${test.correct_answers}/${test.total_questions}`,
+          percentage: isPractice ? undefined : test.score_percentage,
           date: test.completed_at,
           url: `/custom-test/result/${test.id}`
         });

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { decryptAnswer, evaluateNumerical } from '@/lib/evaluate';
 import { createClient as createServerClientLocal } from '@/utils/supabase/server';
+import { MATHS_CHAPTERS } from '@/lib/constants';
 
 export async function POST(req: Request) {
   try {
@@ -14,11 +15,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Payload too large.' }, { status: 413 });
     }
 
-    const { questions, userAnswers } = JSON.parse(bodyText);
+    const { questions, userAnswers, testMode } = JSON.parse(bodyText);
 
     if (!questions || !Array.isArray(questions) || !userAnswers) {
       return NextResponse.json({ error: 'Invalid payload format.' }, { status: 400 });
     }
+
+    // Short Answer practice tests must never be auto-evaluated for correctness.
+    // Students don't submit answers; solutions are revealed separately via /api/reveal-solutions.
+    const isShortAnswerPractice = testMode === 'short_answer_practice' ||
+      (questions.length > 0 && questions.every((q: any) => q.type === 'Short Answer'));
 
     let correctCount = 0;
     const incorrectTopics: Record<string, number> = {};
@@ -44,6 +50,22 @@ export async function POST(req: Request) {
       
       let isCorrect = false;
 
+      // Short Answer practice questions are not auto-graded.
+      // They are always marked as "not scored" so they never pollute stats.
+      if (isShortAnswerPractice || q.type === 'Short Answer') {
+        // Not evaluated — include in list with neutral state
+        evaluatedQuestions.push({
+          ...q,
+          isCorrect: null, // null = not scored
+          studentAnswer: uAns,
+          correctAnswer: correctAns,
+          explanation
+        });
+        if (!chapterStats[q.chapter]) chapterStats[q.chapter] = { total: 0, correct: 0 };
+        // Do NOT increment total — short answers don't count toward score
+        continue;
+      }
+
       if (q.type === 'Numerical') {
         isCorrect = evaluateNumerical(uAns, correctAns);
         
@@ -52,7 +74,7 @@ export async function POST(req: Request) {
         console.log(`[Numerical Eval Trace] raw student: '${uAns}', raw correct: '${correctAns}'`);
         console.log(`[Numerical Eval Trace] Final Result: ${isCorrect ? 'CORRECT' : 'WRONG'}`);
       } else {
-        // Fallback for MCQ, Short Answer, Assertion-Reason
+        // Fallback for MCQ, Assertion-Reason
         isCorrect = uAns.toLowerCase() === correctAns.trim().toLowerCase();
         
         // Development-only diagnostic logging
@@ -79,8 +101,16 @@ export async function POST(req: Request) {
       });
     }
 
-    // Mistake Book Integration
-    const wrongAnswersToAnalyze = evaluatedQuestions.filter(eq => !eq.isCorrect && eq.studentAnswer && eq.studentAnswer.trim() !== '');
+    // Mistake Book Integration — NEVER runs for Short Answer practice tests.
+    // Only process questions where the student actually submitted a wrong answer.
+    const wrongAnswersToAnalyze = isShortAnswerPractice
+      ? [] // Hard block: no mistake book entries for short answer practice
+      : evaluatedQuestions.filter(eq =>
+          !eq.isCorrect &&
+          eq.isCorrect !== null && // exclude unscored questions
+          eq.studentAnswer &&
+          eq.studentAnswer.trim() !== ''
+        );
     
     if (wrongAnswersToAnalyze.length > 0 && user) {
       try {
@@ -182,44 +212,72 @@ ${JSON.stringify(wrongAnswersToAnalyze.map(q => ({ id: q.id, question: q.questio
 
     const chapterAccuracy: Record<string, number> = {};
     for (const [ch, stats] of Object.entries(chapterStats)) {
-      chapterAccuracy[ch] = Math.round((stats.correct / stats.total) * 100);
+      // Avoid division by zero (short answer chapters have total=0)
+      if (stats.total > 0) {
+        chapterAccuracy[ch] = Math.round((stats.correct / stats.total) * 100);
+      }
     }
 
+    let attemptId: string | null = null;
     if (user) {
       try {
         const testType = questions[0]?.sourceSection ? 'youtube_test' : 'custom_test';
         const testTitle = questions[0]?.chapter || 'Mixed Science Test';
-        
+        const eventType = isShortAnswerPractice
+          ? 'short_answer_practice_completed'
+          : testType + '_completed';
+
         await serverSupabase.from('student_activity').insert({
           user_id: user.id,
-          event_type: testType + '_completed',
-          metadata_json: { score: correctCount, total: questions.length }
+          event_type: eventType,
+          metadata_json: isShortAnswerPractice
+            ? { questions: questions.length, mode: 'practice' }
+            : { score: correctCount, total: questions.length }
         });
         
+        // Determine the subject from question data or chapter list
+        const testSubject = questions[0]?.subject || (
+          questions[0]?.chapter && MATHS_CHAPTERS.includes(questions[0]?.chapter) ? 'Mathematics' : 'Science'
+        );
+
         const { data: attempt } = await serverSupabase.from('test_attempts').insert({
           user_id: user.id,
-          test_type: testType,
+          test_type: isShortAnswerPractice ? 'short_answer_practice' : testType,
           title: testTitle,
-          subject: 'Science',
+          subject: testSubject,
           total_questions: questions.length,
-          correct_answers: correctCount,
-          score_percentage: Math.round((correctCount / questions.length) * 100)
+          // Practice tests: store 0 correct_answers and 0 percentage so history
+          // doesn't show misleading stats. Consumers should check test_type.
+          correct_answers: isShortAnswerPractice ? 0 : correctCount,
+          score_percentage: isShortAnswerPractice ? 0 : Math.round((correctCount / Math.max(questions.length, 1)) * 100)
         }).select().single();
         
         if (attempt && evaluatedQuestions.length > 0) {
+           attemptId = attempt.id;
            const questionsToInsert = evaluatedQuestions.map(eq => ({
              attempt_id: attempt.id,
              question_id: eq.id || null,
              chapter: eq.chapter,
              topic: eq.topic,
-             is_correct: eq.isCorrect,
+             // For unscored practice questions, is_correct is null (representing unscored answers).
+             // For scored questions, store boolean evaluation result.
+             is_correct: isShortAnswerPractice ? null : (eq.isCorrect ?? false),
              question_text: eq.question,
              options: eq.options || null,
-             student_answer: eq.studentAnswer,
-             correct_answer: eq.correctAnswer,
-             explanation: eq.explanation
+             student_answer: eq.studentAnswer || null,
+             correct_answer: eq.correctAnswer || null,
+             explanation: eq.explanation || null
            }));
-           await serverSupabase.from('test_attempt_questions').insert(questionsToInsert);
+
+           const { error: insertErr } = await serverSupabase.from('test_attempt_questions').insert(questionsToInsert);
+           if (insertErr && (insertErr.code === '23502' || insertErr.message?.includes('not-null'))) {
+             console.warn('Migration 010 not yet applied on Supabase. Falling back to is_correct: false.');
+             const fallbackQuestions = questionsToInsert.map(q => ({
+               ...q,
+               is_correct: q.is_correct === null ? false : q.is_correct
+             }));
+             await serverSupabase.from('test_attempt_questions').insert(fallbackQuestions);
+           }
         }
       } catch (err) {
         console.error('Failed to log test attempt', err);
@@ -229,10 +287,12 @@ ${JSON.stringify(wrongAnswersToAnalyze.map(q => ({ id: q.id, question: q.questio
     return NextResponse.json({
       score: correctCount,
       total: questions.length,
-      percentage: Math.round((correctCount / questions.length) * 100),
+      percentage: questions.length > 0 ? Math.round((correctCount / questions.length) * 100) : 0,
       weakestTopic: weakest,
       chapterAccuracy,
-      evaluatedQuestions
+      evaluatedQuestions,
+      isPracticeMode: isShortAnswerPractice,
+      attemptId
     });
 
   } catch (error) {

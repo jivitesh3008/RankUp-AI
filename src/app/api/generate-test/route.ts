@@ -83,6 +83,8 @@ export async function POST(req: Request) {
 
     const ncertContext = allChunks.map((c: any) => `[Chapter: ${c.chapter} | Topic: ${c.topic}]\n${c.content}`).join('\n\n---\n\n');
 
+const isShortAnswerOnly = questionType === 'Short Answer';
+
 const systemPrompt = `You are an expert Class 10 CBSE ${subject} examiner. Your task is to generate a custom test.
     
 AUTHORITATIVE NCERT CONTEXT:
@@ -97,8 +99,13 @@ INSTRUCTIONS:
 6. For Numericals: Provide all necessary values from the context and ensure the answer is solvable.
    CRITICAL RULE: Any question that requires a calculated mathematical number or physical unit as the answer MUST be labeled with "type": "Numerical". Do NOT label calculations as "Short Answer".
 7. For Assertion-Reason: Assertion (A) and Reason (R) must be meaningful. Provide standard 4 options.
-8. Keep explanations proportional to question difficulty. They should be concise. Avoid duplicate explanations.
-9. Output the test in STRICT JSON format matching the schema below.
+8. For Short Answer questions:
+   - Write a clear, focused question that tests understanding of a specific concept, definition, process, or phenomenon from the NCERT context.
+   - The "correctAnswer" must be a complete model answer (3-6 sentences) that a student can use to self-assess. Include the key points, relevant formula/equation/definition, and a brief explanation.
+   - The "explanation" must expand further with step-by-step reasoning, examples from the chapter, or the NCERT reference where relevant.
+   - Short Answer questions are for PRACTICE (not auto-graded), so write rich, educational model answers.
+9. Keep explanations proportional to question difficulty. Avoid duplicate questions.
+10. Output the test in STRICT JSON format matching the schema below.
 ${subject === 'Mathematics' ? '\nSPECIAL MATHS RULE: You must use valid LaTeX formatting for all mathematical equations, symbols, and expressions inside the questions, options, and explanations. For example: \\(x^2 + y^2 = r^2\\) or $$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$. Do not use raw text like x^2.' : ''}
 
 EXPECTED JSON SCHEMA:
@@ -110,8 +117,8 @@ EXPECTED JSON SCHEMA:
       "type": "MCQ" | "Short Answer" | "Numerical" | "Assertion-Reason",
       "question": "Question text...",
       "options": ["Option 1", "Option 2", "Option 3", "Option 4"], // only for MCQ and Assertion-Reason
-      "correctAnswer": "Exact text of the correct option, or the short answer/numerical answer",
-      "explanation": "Detailed explanation using NCERT context...",
+      "correctAnswer": "For Short Answer: full model answer (3-6 sentences). For MCQ/Numerical/Assertion-Reason: exact correct answer text.",
+      "explanation": "Detailed step-by-step explanation using NCERT context...",
       "chapter": "Name of the chapter",
       "topic": "Name of the topic"
     }
@@ -170,19 +177,44 @@ EXPECTED JSON SCHEMA:
     const testObject = JSON.parse(replyText);
     
     if (testObject.questions) {
-      testObject.questions = testObject.questions.map((q: any, idx: number) => {
-        const id = q.id || `q-${Date.now()}-${idx}`;
-        const answerToken = encryptAnswer(q.correctAnswer, q.explanation);
-        
-        delete q.correctAnswer;
-        delete q.explanation;
+      // Deduplicate questions by question text to avoid duplicates within the same test
+      const seenQuestions = new Set<string>();
+      testObject.questions = testObject.questions
+        .filter((q: any) => {
+          const key = (q.question || '').trim().toLowerCase();
+          if (seenQuestions.has(key)) return false;
+          seenQuestions.add(key);
+          return true;
+        })
+        .map((q: any, idx: number) => {
+          const id = q.id || `q-${Date.now()}-${idx}`;
+          const answerToken = encryptAnswer(q.correctAnswer || '', q.explanation || '');
 
-        return {
-          ...q,
-          id,
-          answerToken
-        };
-      });
+          // For Short Answer questions, also expose solutionToken so the review
+          // screen can display the model answer without requiring student submission.
+          // solutionToken is identical to answerToken — decrypted on a dedicated endpoint.
+          const isShortAns = q.type === 'Short Answer';
+
+          const result: any = {
+            ...q,
+            id,
+            subject,
+            answerToken
+          };
+
+          if (isShortAns) {
+            // Keep a flag so the frontend knows this is a practice-mode question
+            result.isPractice = true;
+          }
+
+          delete result.correctAnswer;
+          delete result.explanation;
+
+          return result;
+        });
+
+      // Attach overall test mode flag so evaluate-test can guard mistake-book writes
+      testObject.testMode = isShortAnswerOnly ? 'short_answer_practice' : 'standard';
     }
 
     return NextResponse.json(testObject);

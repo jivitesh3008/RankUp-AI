@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { BookOpen, CheckCircle2, ChevronLeft, ChevronRight, XCircle, AlertCircle, Loader2, Play, Bot, FileText, Settings2 } from 'lucide-react';
+import { BookOpen, CheckCircle2, ChevronLeft, ChevronRight, XCircle, AlertCircle, Loader2, Play, Bot, FileText, Settings2, BookMarked, Eye } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
 import AuthPrompt from '@/components/AuthPrompt';
@@ -16,15 +16,22 @@ type Question = {
   answerToken: string;
   chapter: string;
   topic: string;
+  isPractice?: boolean;
 };
 
 type EvaluatedQuestion = Question & {
-  isCorrect: boolean;
+  isCorrect: boolean | null; // null = not scored (Short Answer practice)
   correctAnswer: string;
   explanation: string;
 };
 
-type TestState = 'SETUP' | 'GENERATING' | 'TAKING' | 'EVALUATING' | 'RESULTS' | 'REVIEW';
+type SolutionEntry = {
+  id: string;
+  modelAnswer: string;
+  explanation: string;
+};
+
+type TestState = 'SETUP' | 'GENERATING' | 'TAKING' | 'EVALUATING' | 'RESULTS' | 'REVIEW' | 'REVEALING' | 'SOLUTIONS';
 
 export default function CustomTestPage() {
   const [user, setUser] = useState<any>('loading');
@@ -38,6 +45,7 @@ export default function CustomTestPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [testMode, setTestMode] = useState<string>('standard');
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
   
@@ -46,6 +54,11 @@ export default function CustomTestPage() {
   const [percentage, setPercentage] = useState(0);
   const [weakestTopic, setWeakestTopic] = useState<string>('');
   const [chapterAccuracy, setChapterAccuracy] = useState<Record<string, number>>({});
+  const [isPracticeMode, setIsPracticeMode] = useState(false);
+
+  // Solutions for Short Answer practice review
+  const [solutions, setSolutions] = useState<SolutionEntry[]>([]);
+  const [solutionMap, setSolutionMap] = useState<Record<string, SolutionEntry>>({});
 
   useEffect(() => {
     const checkUser = async () => {
@@ -95,8 +108,11 @@ export default function CustomTestPage() {
       }
 
       setQuestions(data.questions);
+      setTestMode(data.testMode || 'standard');
       setUserAnswers({});
       setCurrentQuestionIdx(0);
+      setSolutions([]);
+      setSolutionMap({});
       setView('TAKING');
     } catch (err: any) {
       console.error(err);
@@ -109,8 +125,39 @@ export default function CustomTestPage() {
     setUserAnswers(prev => ({ ...prev, [questions[currentQuestionIdx].id]: answer }));
   };
 
+  // ─── Short Answer Practice: Finish Test → reveal solutions ───────────────────
+  const handleFinishPracticeTest = async () => {
+    setView('REVEALING');
+    try {
+      const res = await fetch('/api/reveal-solutions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ questions })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to load solutions.');
+      }
+
+      const sols: SolutionEntry[] = data.solutions || [];
+      setSolutions(sols);
+      const map: Record<string, SolutionEntry> = {};
+      for (const s of sols) { map[s.id] = s; }
+      setSolutionMap(map);
+
+      setView('SOLUTIONS');
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Could not load solutions. Please try again.');
+      setView('TAKING');
+    }
+  };
+
+  // ─── Standard mode: Submit test for evaluation ────────────────────────────────
   const handleSubmitTest = async () => {
-    if (Object.keys(userAnswers).length < questions.length) {
+    const answeredCount = Object.keys(userAnswers).length;
+    if (answeredCount < questions.length) {
       const confirmSubmit = window.confirm("You have unanswered questions. Are you sure you want to submit?");
       if (!confirmSubmit) return;
     }
@@ -123,7 +170,8 @@ export default function CustomTestPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           questions,
-          userAnswers
+          userAnswers,
+          testMode
         })
       });
 
@@ -137,6 +185,7 @@ export default function CustomTestPage() {
       setWeakestTopic(data.weakestTopic);
       setChapterAccuracy(data.chapterAccuracy);
       setEvaluatedQuestions(data.evaluatedQuestions);
+      setIsPracticeMode(data.isPracticeMode || false);
 
       setView('RESULTS');
     } catch (err: any) {
@@ -145,6 +194,9 @@ export default function CustomTestPage() {
       setView('TAKING');
     }
   };
+
+  const isShortAnswerMode = testMode === 'short_answer_practice' ||
+    (questions.length > 0 && questions.every(q => q.type === 'Short Answer'));
 
   const currentQ = questions[currentQuestionIdx];
   const AVAILABLE_CHAPTERS = subject === 'Science' ? SCIENCE_CHAPTERS : MATHS_CHAPTERS;
@@ -186,6 +238,7 @@ export default function CustomTestPage() {
 
       <div className="bg-card-bg border border-card-border rounded-3xl shadow-sm overflow-hidden p-6 sm:p-8">
         
+        {/* ── SETUP ── */}
         {view === 'SETUP' && (
           <div className="space-y-8">
             {error && (
@@ -197,7 +250,7 @@ export default function CustomTestPage() {
 
             <div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-4">
-                <h3 className="text-lg font-semibold font-outfit text-foreground">1. Select Subject & Chapters</h3>
+                <h3 className="text-lg font-semibold font-outfit text-foreground">1. Select Subject &amp; Chapters</h3>
                 
                 <div className="flex bg-background border border-card-border p-1 rounded-xl w-full sm:w-auto self-start">
                   <button 
@@ -309,6 +362,13 @@ export default function CustomTestPage() {
                       </button>
                     ))}
                   </div>
+                  {/* Informational badge for Short Answer practice mode */}
+                  {questionType === 'Short Answer' && (
+                    <p className="text-xs text-primary-500/80 mt-2 flex items-center gap-1">
+                      <BookMarked className="w-3 h-3" />
+                      Practice mode — solutions revealed after finishing
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -324,6 +384,7 @@ export default function CustomTestPage() {
           </div>
         )}
 
+        {/* ── GENERATING ── */}
         {view === 'GENERATING' && (
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <div className="w-16 h-16 bg-primary-500/10 rounded-2xl flex items-center justify-center mb-6 animate-pulse border border-primary-500/20">
@@ -336,6 +397,7 @@ export default function CustomTestPage() {
           </div>
         )}
 
+        {/* ── TAKING ── */}
         {view === 'TAKING' && currentQ && (
           <div className="space-y-8">
             <div className="flex items-center justify-between border-b border-card-border pb-4">
@@ -345,14 +407,32 @@ export default function CustomTestPage() {
                    <div className="h-full bg-primary-500 rounded-full transition-all" style={{ width: `${((currentQuestionIdx + 1) / questions.length) * 100}%`}}></div>
                 </div>
               </div>
-              <span className="px-3 py-1 bg-background text-foreground/80 text-xs font-bold rounded-full border border-card-border">{currentQ.type}</span>
+              <div className="flex items-center gap-2">
+                {isShortAnswerMode && (
+                  <span className="px-3 py-1 bg-primary-500/10 text-primary-500 text-xs font-bold rounded-full border border-primary-500/20">
+                    Practice
+                  </span>
+                )}
+                <span className="px-3 py-1 bg-background text-foreground/80 text-xs font-bold rounded-full border border-card-border">{currentQ.type}</span>
+              </div>
             </div>
 
             <div className="text-xl text-foreground font-medium leading-relaxed">
               {currentQ.question}
             </div>
 
-            {currentQ.options && currentQ.options.length > 0 ? (
+            {/* Short Answer practice mode: read-only card, no textarea */}
+            {(currentQ.type === 'Short Answer' || currentQ.isPractice) ? (
+              <div className="p-5 bg-primary-500/5 border border-primary-500/20 rounded-2xl">
+                <div className="flex items-center gap-2 mb-3">
+                  <BookMarked className="w-4 h-4 text-primary-500" />
+                  <p className="text-sm font-semibold text-primary-500">Practice Question</p>
+                </div>
+                <p className="text-foreground/70 text-sm leading-relaxed">
+                  Read this question carefully and attempt it mentally or on paper. The model solution will be revealed after you finish the test.
+                </p>
+              </div>
+            ) : currentQ.options && currentQ.options.length > 0 ? (
               <div className="space-y-3">
                 {currentQ.options.map((opt, i) => {
                   const isSelected = userAnswers[currentQ.id] === opt;
@@ -372,6 +452,7 @@ export default function CustomTestPage() {
                 })}
               </div>
             ) : (
+              // Numerical or other typed-answer questions
               <div>
                 <textarea
                   value={userAnswers[currentQ.id] || ''}
@@ -392,12 +473,23 @@ export default function CustomTestPage() {
               </button>
 
               {currentQuestionIdx === questions.length - 1 ? (
-                <button
-                  onClick={handleSubmitTest}
-                  className="flex items-center gap-2 px-8 py-3 bg-primary-600 text-white hover:bg-primary-700 rounded-xl font-bold transition-colors shadow-sm tap-scale"
-                >
-                  Submit Test <CheckCircle2 className="w-5 h-5" />
-                </button>
+                isShortAnswerMode ? (
+                  /* Short Answer: "Finish Test" → reveal solutions, no submission */
+                  <button
+                    onClick={handleFinishPracticeTest}
+                    className="flex items-center gap-2 px-8 py-3 bg-primary-600 text-white hover:bg-primary-700 rounded-xl font-bold transition-colors shadow-sm tap-scale"
+                  >
+                    Finish Test <Eye className="w-5 h-5" />
+                  </button>
+                ) : (
+                  /* Other modes: submit for scoring */
+                  <button
+                    onClick={handleSubmitTest}
+                    className="flex items-center gap-2 px-8 py-3 bg-primary-600 text-white hover:bg-primary-700 rounded-xl font-bold transition-colors shadow-sm tap-scale"
+                  >
+                    Submit Test <CheckCircle2 className="w-5 h-5" />
+                  </button>
+                )
               ) : (
                 <button
                   onClick={() => setCurrentQuestionIdx(prev => prev + 1)}
@@ -410,6 +502,111 @@ export default function CustomTestPage() {
           </div>
         )}
 
+        {/* ── REVEALING (loading solutions) ── */}
+        {view === 'REVEALING' && (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="w-16 h-16 bg-primary-500/10 rounded-2xl flex items-center justify-center mb-6 animate-pulse border border-primary-500/20">
+              <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
+            </div>
+            <h2 className="text-2xl font-bold font-outfit text-foreground mb-2">Preparing solutions...</h2>
+            <p className="text-foreground/50 max-w-md">
+              Unlocking model answers for your review.
+            </p>
+          </div>
+        )}
+
+        {/* ── SOLUTIONS (Short Answer Practice Review) ── */}
+        {view === 'SOLUTIONS' && (
+          <div className="space-y-8">
+            {/* Header */}
+            <div className="text-center py-4">
+              <div className="w-16 h-16 bg-primary-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-primary-500/20">
+                <BookMarked className="w-8 h-8 text-primary-500" />
+              </div>
+              <h2 className="text-3xl font-bold font-outfit text-foreground mb-2">Practice Complete</h2>
+              <p className="text-foreground/60 max-w-lg mx-auto">
+                Well done! Here are the model solutions for all {questions.length} questions. Compare them with your own answers to identify areas to strengthen.
+              </p>
+              <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-primary-500/10 text-primary-500 text-sm font-semibold rounded-full border border-primary-500/20">
+                <BookMarked className="w-4 h-4" />
+                Practice / Solutions Review — Not Scored
+              </div>
+            </div>
+
+            {/* Solutions list */}
+            <div className="space-y-6">
+              {questions.map((q, idx) => {
+                const sol = solutionMap[q.id];
+                return (
+                  <div key={q.id} className="p-6 bg-background rounded-2xl border border-card-border shadow-sm">
+                    <div className="flex items-start gap-3 mb-4">
+                      <div className="shrink-0 w-7 h-7 bg-primary-500/10 border border-primary-500/20 rounded-full flex items-center justify-center">
+                        <span className="text-xs font-bold text-primary-500">{idx + 1}</span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-bold text-foreground/40 mb-2 uppercase tracking-wider">{q.chapter} · {q.topic}</p>
+                        <p className="text-lg font-medium text-foreground leading-relaxed">{q.question}</p>
+                      </div>
+                    </div>
+
+                    {sol ? (
+                      <div className="space-y-4 ml-10">
+                        {/* Model Answer */}
+                        <div className="p-5 bg-primary-500/5 border border-primary-500/20 rounded-xl">
+                          <p className="text-xs font-bold text-primary-500 mb-2 uppercase tracking-wider flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Model Answer
+                          </p>
+                          <p className="text-foreground/90 leading-relaxed whitespace-pre-line">
+                            {sol.modelAnswer || 'No model answer available.'}
+                          </p>
+                        </div>
+
+                        {/* Explanation */}
+                        {sol.explanation && sol.explanation.trim() && (
+                          <div className="p-5 bg-card-bg border border-card-border rounded-xl">
+                            <p className="text-xs font-bold text-foreground/50 mb-2 uppercase tracking-wider">
+                              Detailed Explanation
+                            </p>
+                            <p className="text-foreground/80 text-sm leading-relaxed whitespace-pre-line">
+                              {sol.explanation}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Help me understand link */}
+                        <div className="flex justify-end">
+                          <Link
+                            href={`/tutor?prefill=${encodeURIComponent(`Help me understand this question from ${q.chapter}: "${q.question}"`)}`}
+                            target="_blank"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-background hover:bg-card-border text-foreground rounded-lg text-sm font-medium transition-colors border border-card-border shadow-sm tap-scale"
+                          >
+                            <Bot className="w-4 h-4" /> Ask AI Tutor
+                          </Link>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="ml-10 p-4 bg-card-bg rounded-xl border border-card-border">
+                        <p className="text-foreground/50 text-sm italic">Solution unavailable for this question.</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Actions */}
+            <div className="pt-6 flex flex-col sm:flex-row justify-center gap-3 border-t border-card-border">
+              <button
+                onClick={() => setView('SETUP')}
+                className="px-6 py-3 text-foreground bg-background hover:bg-card-border border border-card-border rounded-xl font-medium transition-colors tap-scale"
+              >
+                Create New Test
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── EVALUATING (standard mode) ── */}
         {view === 'EVALUATING' && (
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <div className="w-16 h-16 bg-accent-emerald-500/10 rounded-2xl flex items-center justify-center mb-6 animate-pulse border border-accent-emerald-500/20">
@@ -422,6 +619,7 @@ export default function CustomTestPage() {
           </div>
         )}
 
+        {/* ── RESULTS (standard scored mode) ── */}
         {view === 'RESULTS' && (
           <div className="space-y-8 text-center max-w-2xl mx-auto py-8">
             <div className="w-20 h-20 bg-accent-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-accent-emerald-500/20">
@@ -479,6 +677,7 @@ export default function CustomTestPage() {
           </div>
         )}
 
+        {/* ── REVIEW (standard scored mode answer review) ── */}
         {view === 'REVIEW' && (
           <div className="space-y-8">
             <div className="flex items-center justify-between border-b border-card-border pb-4">

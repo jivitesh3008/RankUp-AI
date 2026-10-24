@@ -25,7 +25,7 @@ export const getRecentActivity = cache(async (userId: string): Promise<RecentAct
       .limit(3),
     supabase
       .from('test_attempts')
-      .select('id, title, total_questions, correct_answers, subject, completed_at')
+      .select('id, test_type, title, total_questions, correct_answers, subject, completed_at')
       .eq('user_id', userId)
       .order('completed_at', { ascending: false })
       .limit(3),
@@ -53,12 +53,15 @@ export const getRecentActivity = cache(async (userId: string): Promise<RecentAct
     });
   }
   if (attempts) {
-    attempts.forEach(a => mergedHistory.push({
-      type: 'test',
-      title: a.title || 'Test',
-      date: a.completed_at,
-      score: `${a.correct_answers}/${a.total_questions}`,
-    }));
+    attempts.forEach(a => {
+      const isPractice = a.test_type === 'short_answer_practice';
+      mergedHistory.push({
+        type: 'test',
+        title: a.title || (isPractice ? 'Short Answer Practice' : 'Test'),
+        date: a.completed_at,
+        score: isPractice ? null : `${a.correct_answers}/${a.total_questions}`,
+      });
+    });
   }
   if (evaluations) {
     evaluations.forEach(e => mergedHistory.push({

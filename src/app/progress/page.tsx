@@ -41,11 +41,12 @@ export default async function ProgressPage() {
     .eq('user_id', user.id);
   const notesCount = notesCountResult || 0;
 
-  // Chapter Performance
+  // Chapter Performance (only calculated from scored tests)
   const chapterStats: Record<string, { total: number, correct: number }> = {};
   
   if (attempts) {
     for (const attempt of attempts) {
+      if (attempt.test_type === 'short_answer_practice') continue;
       if (attempt.title) {
         if (!chapterStats[attempt.title]) {
            chapterStats[attempt.title] = { total: 0, correct: 0 };
@@ -186,6 +187,7 @@ export default async function ProgressPage() {
                            {act.event_type === 'tutor_question' && 'Asked a doubt in Tutor'}
                            {act.event_type === 'image_question' && 'Uploaded an image to Tutor'}
                            {act.event_type === 'custom_test_completed' && 'Completed a Custom Test'}
+                            {act.event_type === 'short_answer_practice_completed' && 'Completed Short Answer Practice'}
                            {act.event_type === 'youtube_test_completed' && 'Completed a YouTube Test'}
                            {act.event_type === 'answer_evaluation' && 'Evaluated a handwritten answer'}
                            {act.event_type === 'quick_revision' && 'Completed a Quick Revision'}

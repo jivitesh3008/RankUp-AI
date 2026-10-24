@@ -31,7 +31,7 @@ export async function getProgressStats(userId: string): Promise<ProgressStats> {
       .limit(300),
     supabase
       .from('test_attempts')
-      .select('total_questions, correct_answers')
+      .select('test_type, total_questions, correct_answers')
       .eq('user_id', userId),
     supabase
       .from('answer_evaluations')
@@ -98,15 +98,16 @@ export async function getProgressStats(userId: string): Promise<ProgressStats> {
     bestStreak = max;
   }
 
-  // 2. Fetch Test Stats
+  // 2. Fetch Test Stats — only scored tests contribute to accuracy and scored questions count
   let testsCompleted = 0;
   let totalQuestions = 0;
   let accuracy = 0;
 
   if (allAttempts && allAttempts.length > 0) {
     testsCompleted = allAttempts.length;
-    totalQuestions = allAttempts.reduce((acc, curr) => acc + (curr.total_questions || 0), 0);
-    const correctQ = allAttempts.reduce((acc, curr) => acc + (curr.correct_answers || 0), 0);
+    const scoredAttempts = allAttempts.filter(a => a.test_type !== 'short_answer_practice');
+    totalQuestions = scoredAttempts.reduce((acc, curr) => acc + (curr.total_questions || 0), 0);
+    const correctQ = scoredAttempts.reduce((acc, curr) => acc + (curr.correct_answers || 0), 0);
     accuracy = totalQuestions > 0 ? Math.round((correctQ / totalQuestions) * 100) : 0;
   }
 
